@@ -5,10 +5,10 @@ function Dashboard() {
   // TODO: Replace with actual user from auth store
   const userName = "User";
   return (
-    <div className="p-6">
+    <div className="px-6 pt-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="pt-6 mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">Welcome back, {userName}!</h1>
           <p className="text-gray-400 text-lg">Ready to continue your learning journey?</p>
         </div>
