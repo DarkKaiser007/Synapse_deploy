@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../server/src/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  password     String
+  institution  String?
+  grade        String?
+  language     String    @default("english")
+  createdAt    DateTime  @default(now())
+  subjects     Subject[]
+  notes        Note[]
+  sessions     StudySession[]
+  studyPlan    StudyPlan?
+}
+
+model Subject {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  name            String
+  examDate        DateTime?
+  confidenceLevel Int       @default(3)
+  notes           Note[]
+  sessions        StudySession[]
+}
+
+model Note {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  subjectId     String?
+  subject       Subject?  @relation(fields: [subjectId], references: [id])
+  rawText       String
+  extractedText String?
+  sourceType    String    // TYPED, IMAGE, AUDIO
+  fileUrl       String?
+  quizzes       Quiz[]
+  createdAt     DateTime  @default(now())
+}
+
+model Quiz {
+  id        String        @id @default(cuid())
+  noteId    String
+  note      Note          @relation(fields: [noteId], references: [id])
+  userId    String
+  subjectId String?
+  questions Json
+  attempts  QuizAttempt[]
+  createdAt DateTime      @default(now())
+}
+
+model QuizAttempt {
+  id          String   @id @default(cuid())
+  quizId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id])
+  userId      String
+  score       Int
+  answers     Json
+  completedAt DateTime @default(now())
+}
+
+model StudySession {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  subjectId       String?
+  subject         Subject? @relation(fields: [subjectId], references: [id])
+  durationMinutes Int
+  type            String   // POMODORO, MANUAL
+  date            DateTime @default(now())
+}
+
+model StudyPlan {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+  planData    Json
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
