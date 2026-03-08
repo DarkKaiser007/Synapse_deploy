@@ -1,86 +1,61 @@
-import express from 'express';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
+import express from "express";
+import { AuthRequest, authMiddleware } from "../middleware/auth";
+import {
+  simplifyText,
+  summarizeText,
+  generateQuiz,
+} from "../services/aiService";
 
 const router = express.Router();
 
-// Mock AI responses - in a real app, you'd integrate with OpenAI, Claude, etc.
-const mockSimplify = (text: string) => {
-  // Simple mock - in reality, use AI API
-  return `Simplified version: ${text.substring(0, 100)}... (This is a simplified explanation of the key concepts.)`;
-};
-
-const mockSummarize = (text: string) => {
-  // Simple mock - in reality, use AI API
-  return `Summary: This text covers ${text.length} characters of content. Key points include the main concepts discussed.`;
-};
-
-const mockGenerateQuiz = (text: string) => {
-  // Simple mock - in reality, use AI API
-  return `Quiz generated from the content:
-
-1. What is the main topic discussed?
-   a) Topic A
-   b) Topic B
-   c) Topic C
-   d) Topic D
-
-2. Which of the following is correct?
-   a) Option A
-   b) Option B
-   c) Option C
-   d) Option D
-
-Answers: 1-a, 2-b`;
-};
-
-router.post('/simplify', authMiddleware, async (req: AuthRequest, res) => {
+router.post("/simplify", authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { noteId, content } = req.body;
+    const { content } = req.body;
 
     if (!content) {
-      return res.status(400).json({ error: 'Content is required' });
+      return res.status(400).json({ error: "Content required" });
     }
 
-    // In a real app, call AI service
-    const result = mockSimplify(content);
+    const result = await simplifyText(content);
 
     res.json({ result });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to simplify content' });
+    console.error("SIMPLIFY ERROR:", error);
+    res.status(500).json({ error: "Failed to simplify content" });
   }
 });
 
-router.post('/summarize', authMiddleware, async (req: AuthRequest, res) => {
+router.post("/summarize", authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { noteId, content } = req.body;
+    const { content } = req.body;
 
     if (!content) {
-      return res.status(400).json({ error: 'Content is required' });
+      return res.status(400).json({ error: "Content required" });
     }
 
-    // In a real app, call AI service
-    const result = mockSummarize(content);
+    const result = await summarizeText(content);
 
     res.json({ result });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to summarize content' });
+    console.error("SUMMARIZE ERROR:", error);
+    res.status(500).json({ error: "Failed to summarize content" });
   }
 });
 
-router.post('/generate-quiz', authMiddleware, async (req: AuthRequest, res) => {
+router.post("/generate-quiz", authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { noteId, content } = req.body;
+    const { content } = req.body;
 
     if (!content) {
-      return res.status(400).json({ error: 'Content is required' });
+      return res.status(400).json({ error: "Content required" });
     }
 
-    // In a real app, call AI service
-    const result = mockGenerateQuiz(content);
+    const result = await generateQuiz(content);
 
     res.json({ result });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to generate quiz' });
+    console.error("QUIZ ERROR:", error);
+    res.status(500).json({ error: "Failed to generate quiz" });
   }
 });
 

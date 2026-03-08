@@ -1,93 +1,90 @@
-import express from 'express';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
+import express from "express";
+import prisma from "../prisma";
+import { AuthRequest, authMiddleware } from "../middleware/auth";
 
 const router = express.Router();
 
-// Mock notes store
-const notes: any[] = [
-  {
-    id: '1',
-    userId: '1',
-    subjectId: null,
-    rawText: 'This is a sample note about Data Structures.\n\nKey concepts:\n- Arrays\n- Linked Lists\n- Trees\n- Graphs',
-    extractedText: null,
-    sourceType: 'TYPED',
-    fileUrl: null,
-    createdAt: new Date('2024-01-15'),
-    title: 'Data Structures Overview',
-  },
-  {
-    id: '2',
-    userId: '1',
-    subjectId: null,
-    rawText: 'Machine Learning fundamentals:\n\n1. Supervised Learning\n2. Unsupervised Learning\n3. Neural Networks',
-    extractedText: null,
-    sourceType: 'TYPED',
-    fileUrl: null,
-    createdAt: new Date('2024-01-20'),
-    title: 'ML Basics',
-  },
-];
-
-router.post('/text', authMiddleware, async (req: AuthRequest, res) => {
+// CREATE NOTE
+router.post("/text", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { title, rawText, subjectId } = req.body;
-    const userId = req.user.id;
 
-    const note = {
-      id: (notes.length + 1).toString(),
-      userId,
-      subjectId,
-      rawText,
-      extractedText: null,
-      sourceType: 'TYPED',
-      fileUrl: null,
-      createdAt: new Date(),
-      title: title || rawText.split('\n')[0] || 'Untitled Note',
-    };
-    notes.push(note);
+    if (!rawText) {
+      return res.status(400).json({ error: "Content required" });
+    }
+
+    const note = await prisma.note.create({
+      data: {
+        userId: req.user!.id,
+        title: title || rawText.substring(0, 50),
+        rawText,
+        subjectId: subjectId || null,
+        sourceType: "TYPED",
+      },
+      include: {
+        subject: true,
+      },
+    });
 
     res.json(note);
   } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+    console.error("CREATE NOTE ERROR:", error);
+    res.status(500).json({ error: "Failed to create note" });
   }
 });
 
-router.get('/', authMiddleware, async (req: AuthRequest, res) => {
+// GET USER NOTES
+router.get("/", authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const userId = req.user.id;
-    const userNotes = notes.filter(n => n.userId === userId);
-    res.json(userNotes);
+    const notes = await prisma.note.findMany({
+      where: {
+        userId: req.user!.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.json(notes);
   } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+    console.error("FETCH NOTES ERROR:", error);
+    res.status(500).json({ error: "Failed to fetch notes" });
   }
 });
 
-router.get('/:id', authMiddleware, async (req: AuthRequest, res) => {
+// GET SINGLE NOTE
+router.get("/:id", authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const id = req.params.id as string;
-    const userId = req.user.id;
-    const note = notes.find(n => n.id === id && n.userId === userId);
+    const note = await prisma.note.findUnique({
+      where: {
+        id: req.params.id as string,
+      },
+    });
+
     if (!note) {
-      return res.status(404).json({ error: 'Note not found' });
+      return res.status(404).json({ error: "Note not found" });
     }
+
     res.json(note);
   } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+    console.error("FETCH NOTE ERROR:", error);
+    res.status(500).json({ error: "Failed to fetch note" });
   }
 });
 
-router.delete('/:id', authMiddleware, async (req: AuthRequest, res) => {
+// DELETE NOTE
+router.delete("/:id", authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const id = req.params.id as string;
-    const index = notes.findIndex(n => n.id === id);
-    if (index === -1) {
-      return res.status(404).json({ error: 'Note not found' });
-    }
-    notes.splice(index, 1);
-    res.json({ message: 'Note deleted' });
+    await prisma.note.delete({
+      where: {
+        id: req.params.id as string,
+      },
+    });
+
+    res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+    console.error("DELETE NOTE ERROR:", error);
+    res.status(500).json({ error: "Failed to delete note" });
   }
 });
 

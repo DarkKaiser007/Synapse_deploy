@@ -1,16 +1,24 @@
-import { BookOpen, Clock, Target, TrendingUp } from 'lucide-react'
-import ActivityHeatmap from '../components/ActivityHeatmap';
+import { BookOpen, Clock, Target, TrendingUp } from "lucide-react";
+import ActivityHeatmap from "../components/ActivityHeatmap";
+import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "../stores/auth";
 
 function Dashboard() {
   // TODO: Replace with actual user from auth store
-  const userName = "User";
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const firstName = user?.name?.split(" ")[0] || "there";
   return (
     <div className="px-6 pt-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="pt-6 mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Welcome back, {userName}!</h1>
-          <p className="text-gray-400 text-lg">Ready to continue your learning journey?</p>
+          <h1 className="text-4xl font-bold text-white mb-2">
+            Welcome back, {firstName}!
+          </h1>
+          <p className="text-gray-400 text-lg">
+            Ready to continue your learning journey?
+          </p>
         </div>
 
         {/* Stats Cards */}
@@ -82,41 +90,60 @@ function Dashboard() {
         {/* Quick Actions & Recent Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
-            <h2 className="text-2xl font-semibold text-white mb-6">Quick Actions</h2>
+            <h2 className="text-2xl font-semibold text-white mb-6">
+              Quick Actions
+            </h2>
             <div className="space-y-4">
-              <button className="w-full bg-[var(--color-primary)] hover:bg-blue-600 text-white px-6 py-4 rounded-xl transition-all duration-200 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105 text-left font-medium">
+              <button
+                onClick={() => navigate("/notes")}
+                className="w-full bg-[var(--color-primary)] hover:bg-blue-600 text-white px-6 py-4 rounded-xl transition-all duration-200 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105 text-left font-medium"
+              >
                 Create New Note
               </button>
-              <button className="w-full border border-white/20 hover:border-white/30 text-white px-6 py-4 rounded-xl transition-all duration-200 backdrop-blur-sm bg-white/5 hover:bg-white/10 text-left font-medium">
+              <button
+                onClick={() => navigate("/study-planner")}
+                className="w-full border border-white/20 hover:border-white/30 text-white px-6 py-4 rounded-xl transition-all duration-200 backdrop-blur-sm bg-white/5 hover:bg-white/10 text-left font-medium"
+              >
                 Start Study Session
               </button>
-              <button className="w-full border border-white/20 hover:border-white/30 text-white px-6 py-4 rounded-xl transition-all duration-200 backdrop-blur-sm bg-white/5 hover:bg-white/10 text-left font-medium">
+              <button
+                onClick={() => navigate("/quizzes")}
+                className="w-full border border-white/20 hover:border-white/30 text-white px-6 py-4 rounded-xl transition-all duration-200 backdrop-blur-sm bg-white/5 hover:bg-white/10 text-left font-medium"
+              >
                 Generate Quiz
               </button>
             </div>
           </div>
 
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
-            <h2 className="text-2xl font-semibold text-white mb-6">Recent Activity</h2>
+            <h2 className="text-2xl font-semibold text-white mb-6">
+              Recent Activity
+            </h2>
             <div className="space-y-4">
               <div className="flex items-center p-3 rounded-xl bg-white/5 backdrop-blur-sm">
                 <div className="w-3 h-3 bg-[var(--color-primary)] rounded-full mr-4"></div>
                 <div>
-                  <span className="text-white text-sm">Completed "Data Structures" quiz - 92%</span>
+                  <span className="text-white text-sm">
+                    Completed "Data Structures" quiz - 92%
+                  </span>
                   <p className="text-gray-400 text-xs">2 hours ago</p>
                 </div>
               </div>
               <div className="flex items-center p-3 rounded-xl bg-white/5 backdrop-blur-sm">
                 <div className="w-3 h-3 bg-green-400 rounded-full mr-4"></div>
                 <div>
-                  <span className="text-white text-sm">Added notes for "Machine Learning" subject</span>
+                  <span className="text-white text-sm">
+                    Added notes for "Machine Learning" subject
+                  </span>
                   <p className="text-gray-400 text-xs">1 day ago</p>
                 </div>
               </div>
               <div className="flex items-center p-3 rounded-xl bg-white/5 backdrop-blur-sm">
                 <div className="w-3 h-3 bg-yellow-400 rounded-full mr-4"></div>
                 <div>
-                  <span className="text-white text-sm">Study session: 45 minutes focused</span>
+                  <span className="text-white text-sm">
+                    Study session: 45 minutes focused
+                  </span>
                   <p className="text-gray-400 text-xs">2 days ago</p>
                 </div>
               </div>
@@ -125,7 +152,7 @@ function Dashboard() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-export default Dashboard
+export default Dashboard;
