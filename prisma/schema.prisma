@@ -40,9 +40,10 @@ model Note {
   user          User      @relation(fields: [userId], references: [id])
   subjectId     String?
   subject       Subject?  @relation(fields: [subjectId], references: [id])
+  title         String
   rawText       String
   extractedText String?
-  sourceType    String    // TYPED, IMAGE, AUDIO
+  sourceType    String
   fileUrl       String?
   quizzes       Quiz[]
   createdAt     DateTime  @default(now())
