@@ -12,12 +12,9 @@ import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Notes from "./pages/Notes";
 import NoteDetail from "./pages/NoteDetail";
+import StudyPlanner from "./pages/StudyPlanner";
 import Layout from "./components/Layout";
-const Planner = () => (
-  <div className="p-6">
-    <h1 className="text-2xl font-bold text-white">Study Planner</h1>
-  </div>
-);
+
 const Quizzes = () => (
   <div className="p-6">
     <h1 className="text-2xl font-bold text-white">Quizzes</h1>
@@ -199,7 +196,7 @@ function App() {
           element={
             <ProtectedRoute>
               <Layout>
-                <Planner />
+                <StudyPlanner />
               </Layout>
             </ProtectedRoute>
           }
