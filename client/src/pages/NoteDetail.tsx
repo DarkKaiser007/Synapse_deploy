@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Sparkles,
   FileText,
+  File as FileIcon,
   Brain,
   BookOpen,
   Calendar,
@@ -27,7 +28,7 @@ interface Note {
   subject?: { name: string };
   rawText: string;
   extractedText?: string;
-  sourceType: "TYPED" | "IMAGE" | "AUDIO";
+  sourceType: "TYPED" | "IMAGE" | "AUDIO" | "PDF";
   fileUrl?: string;
   createdAt: string;
   title?: string;
@@ -161,6 +162,8 @@ const NoteDetail: React.FC = () => {
         return <BookOpen className="h-5 w-5" />;
       case "AUDIO":
         return <BookOpen className="h-5 w-5" />;
+      case "PDF":
+        return <FileIcon className="h-5 w-5" />;
       default:
         return <FileText className="h-5 w-5" />;
     }

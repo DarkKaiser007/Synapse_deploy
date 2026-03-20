@@ -22,7 +22,7 @@ export interface Note {
   subjectId?: string;
   rawText: string;
   extractedText?: string;
-  sourceType: 'TYPED' | 'IMAGE' | 'AUDIO';
+  sourceType: 'TYPED' | 'IMAGE' | 'AUDIO' | 'PDF';
   fileUrl?: string;
   createdAt: Date;
 }

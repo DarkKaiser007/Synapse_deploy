@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, FileText, Image, Mic, Calendar, Tag, Upload, X } from 'lucide-react';
+import { Plus, FileText, Image, Mic, Calendar, Tag, Upload, X, File as FileIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Note {
@@ -10,7 +10,7 @@ interface Note {
   subject?: { name: string };
   rawText: string;
   extractedText?: string;
-  sourceType: 'TYPED' | 'IMAGE' | 'AUDIO';
+  sourceType: 'TYPED' | 'IMAGE' | 'AUDIO' | 'PDF';
   fileUrl?: string;
   createdAt: string;
   title?: string;
@@ -26,9 +26,11 @@ const Notes: React.FC = () => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
   const [extractedText, setExtractedText] = useState('');
   const [imageError, setImageError] = useState('');
+  const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showCreateSubject, setShowCreateSubject] = useState(false);
   const [newSubjectName, setNewSubjectName] = useState('');
@@ -43,6 +45,14 @@ const Notes: React.FC = () => {
     fetchNotes();
     fetchSubjects();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+    };
+  }, [imagePreviewUrl]);
 
   const fetchNotes = async () => {
     try {
@@ -150,16 +160,18 @@ const Notes: React.FC = () => {
     }
   };
 
-  const handleImageUpload = async (file: File) => {
-    setUploadingImage(true);
+  const handleFileUpload = async (file: File) => {
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+    setUploadingFile(true);
     setExtractedText('');
     setImageError('');
 
     const formData = new FormData();
-    formData.append('image', file);
+    formData.append(isPdf ? 'pdf' : 'image', file);
 
     try {
-      const response = await fetch('/api/notes/upload-image', {
+      const response = await fetch(isPdf ? '/api/notes/upload-pdf' : '/api/notes/upload-image', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -169,20 +181,39 @@ const Notes: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setExtractedText(data.extractedText || 'No text extracted from image');
-        toast.success('Image processed successfully!');
+        setExtractedText(data.extractedText || `No text extracted from ${isPdf ? 'PDF' : 'image'}`);
+
+        if (isPdf) {
+          fetchNotes();
+        }
+
+        toast.success(`${isPdf ? 'PDF' : 'Image'} processed successfully!`);
       } else {
         const errorData = await response.json();
-        const errorMsg = errorData.error || 'Failed to process image';
+        const errorMsg = errorData.error || `Failed to process ${isPdf ? 'PDF' : 'image'}`;
         setImageError(errorMsg);
         toast.error(errorMsg);
       }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to upload image';
+      const errorMsg = error instanceof Error ? error.message : `Failed to upload ${isPdf ? 'PDF' : 'image'}`;
       setImageError(errorMsg);
       toast.error(errorMsg);
     } finally {
-      setUploadingImage(false);
+      setUploadingFile(false);
+    }
+  };
+
+  const updateSelectedUploadFile = (file: File) => {
+    setSelectedUploadFile(file);
+
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
+
+    if (file.type.startsWith('image/')) {
+      setImagePreviewUrl(URL.createObjectURL(file));
+    } else {
+      setImagePreviewUrl(null);
     }
   };
 
@@ -194,14 +225,18 @@ const Notes: React.FC = () => {
     e.preventDefault();
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      handleImageUpload(files[0]);
+      const file = files[0];
+      updateSelectedUploadFile(file);
+      handleFileUpload(file);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      handleImageUpload(files[0]);
+      const file = files[0];
+      updateSelectedUploadFile(file);
+      handleFileUpload(file);
     }
   };
 
@@ -221,6 +256,8 @@ const Notes: React.FC = () => {
         return <Image className="h-4 w-4" />;
       case 'AUDIO':
         return <Mic className="h-4 w-4" />;
+      case 'PDF':
+        return <FileIcon className="h-4 w-4" />;
       default:
         return <FileText className="h-4 w-4" />;
     }
@@ -399,21 +436,49 @@ const Notes: React.FC = () => {
           onClick={() => fileInputRef.current?.click()}
         >
           <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-white text-lg mb-2">Upload an image to extract text</p>
-          <p className="text-gray-400">Drag and drop an image here, or click to browse</p>
+          <p className="text-white text-lg mb-2">Upload an image or PDF to extract text</p>
+          <p className="text-gray-400">Drag and drop an image or PDF here, or click to browse</p>
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,.pdf"
             onChange={handleFileSelect}
             className="hidden"
           />
         </div>
 
-        {uploadingImage && (
+        {selectedUploadFile && (
+          <div className="mt-4 bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              {selectedUploadFile.type === 'application/pdf' ? (
+                <div className="h-14 w-14 rounded-lg bg-red-500/15 border border-red-400/30 flex items-center justify-center">
+                  <FileIcon className="h-7 w-7 text-red-300" />
+                </div>
+              ) : imagePreviewUrl ? (
+                <img
+                  src={imagePreviewUrl}
+                  alt="Selected upload"
+                  className="h-14 w-14 rounded-lg object-cover border border-white/10"
+                />
+              ) : (
+                <div className="h-14 w-14 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+                  <Image className="h-6 w-6 text-gray-300" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-white truncate">{selectedUploadFile.name}</p>
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 mt-1 text-xs bg-white/10 text-gray-300 border border-white/15">
+                  {selectedUploadFile.type === 'application/pdf' ? 'PDF' : 'IMAGE'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {uploadingFile && (
           <div className="mt-4 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-primary)] mx-auto"></div>
-            <p className="text-gray-400 mt-2">Processing image...</p>
+            <p className="text-gray-400 mt-2">Processing file...</p>
           </div>
         )}
 
@@ -433,7 +498,7 @@ const Notes: React.FC = () => {
               <button
                 onClick={() => {
                   setContent(extractedText);
-                  setTitle('Extracted from Image');
+                  setTitle(selectedUploadFile?.type === 'application/pdf' ? 'Extracted from PDF' : 'Extracted from Image');
                   setShowCreateForm(true);
                 }}
                 className="bg-[var(--color-primary)] hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
@@ -459,6 +524,12 @@ const Notes: React.FC = () => {
                 <span className="text-xs text-gray-400 uppercase tracking-wide">
                   {note.sourceType}
                 </span>
+                {note.sourceType === 'PDF' && (
+                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-500/20 text-red-200 border border-red-400/30">
+                    <FileIcon className="h-3 w-3" />
+                    PDF
+                  </span>
+                )}
               </div>
               {note.subject && (
                 <div className="flex items-center space-x-1 text-xs text-gray-400">
