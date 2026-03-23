@@ -45,3 +45,30 @@ export async function getChatHistory(noteId: string) {
 export async function clearChatHistory(noteId: string) {
   return apiRequest(`/chat/${noteId}`, "DELETE") as Promise<{ success: boolean }>;
 }
+
+export async function generateAudioLecture(
+  noteId: string,
+  forceRegenerate: boolean = false,
+) {
+  const token = localStorage.getItem("token");
+  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+  const response = await fetch(`${apiUrl}/notes/${noteId}/audio-lecture`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: token ? `Bearer ${token}` : "",
+    },
+    body: JSON.stringify({ forceRegenerate }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to generate audio lecture");
+  }
+
+  return response.json() as Promise<{
+    audioUrl: string;
+    cached: boolean;
+  }>;
+}

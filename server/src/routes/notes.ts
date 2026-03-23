@@ -4,12 +4,14 @@ import prisma from "../prisma";
 import { AuthRequest, authMiddleware } from "../middleware/auth";
 import { extractNotesFromImageBase64 } from "../services/noteVision";
 import {
+  createBlobReadSasUrl,
   deleteAzureBlobByUrl,
   uploadBufferToAzureBlob,
 } from "../services/fileStorage";
 import { transcribeAudioBuffer } from "../services/speechToText";
 import { getPreferredLanguage } from "../services/preferredLanguage";
 import { azureOpenAIClient, azureOpenAIModel } from "../services/azureOpenAI";
+const speechSdk = require("microsoft-cognitiveservices-speech-sdk");
 const { PDFParse } = require("pdf-parse");
 
 const NO_SPEECH_ERROR_MESSAGE =
@@ -20,6 +22,15 @@ const ENGLISH_CHECK_PROMPT =
 
 const TRANSLATE_TO_ENGLISH_SYSTEM_PROMPT =
   "You are a translator. Translate the following text to English accurately and naturally. Return only the translated text, nothing else.";
+
+const AUDIO_LECTURE_SYSTEM_PROMPT = `You are an enthusiastic and clear university tutor. Based on the note content provided, create an engaging spoken lecture script of approximately 5 minutes (around 700-800 words).
+- Start with a friendly introduction of the topic
+- Explain all key concepts clearly with real-world examples
+- Use a conversational tone as if speaking directly to a student
+- Include natural pause cues like '...' or 'Now,'
+- End with a brief summary of what was covered
+- Do NOT include any markdown, headers, or bullet points - only plain flowing speech text
+Respond in the user's preferred language.`;
 
 async function isTextEnglish(text: string): Promise<boolean> {
   const completion = await azureOpenAIClient.chat.completions.create({
@@ -110,6 +121,73 @@ async function normalizeVoiceTextToEnglish(transcribedText: string): Promise<{
       translatedToEnglish: false,
       translationFailed: true,
     };
+  }
+}
+
+async function generateAudioLectureScript({
+  noteContent,
+  preferredLanguage,
+}: {
+  noteContent: string;
+  preferredLanguage: string;
+}): Promise<string> {
+  const completion = await azureOpenAIClient.chat.completions.create({
+    model: azureOpenAIModel,
+    messages: [
+      {
+        role: "system",
+        content: AUDIO_LECTURE_SYSTEM_PROMPT,
+      },
+      {
+        role: "user",
+        content: `Preferred language: ${preferredLanguage}\n\nNote content:\n${noteContent}`,
+      },
+    ],
+  });
+
+  return (completion.choices[0]?.message?.content || "").trim();
+}
+
+async function synthesizeLectureAudioBuffer(script: string): Promise<Buffer> {
+  const speechKey = process.env.AZURE_SPEECH_KEY;
+  const speechRegion = process.env.AZURE_SPEECH_REGION;
+
+  if (!speechKey || !speechRegion) {
+    throw new Error("Azure Speech is not configured");
+  }
+
+  const speechConfig = speechSdk.SpeechConfig.fromSubscription(
+    speechKey,
+    speechRegion,
+  );
+  speechConfig.speechSynthesisVoiceName = "en-US-BrianNeural";
+  speechConfig.speechSynthesisOutputFormat =
+    speechSdk.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
+
+  const synthesizer = new speechSdk.SpeechSynthesizer(speechConfig);
+
+  try {
+    const result = await new Promise<any>((resolve, reject) => {
+      synthesizer.speakTextAsync(script, resolve, reject);
+    });
+
+    if (result.reason !== speechSdk.ResultReason.SynthesizingAudioCompleted) {
+      const cancellationDetails = speechSdk.CancellationDetails.fromResult(result);
+      throw new Error(
+        cancellationDetails?.errorDetails || "Speech synthesis did not complete",
+      );
+    }
+
+    const audioData = result.audioData as ArrayBuffer | Uint8Array | undefined;
+    if (!audioData) {
+      throw new Error("No audio data returned from speech synthesis");
+    }
+
+    return Buffer.from(
+      audioData instanceof ArrayBuffer ? new Uint8Array(audioData) : audioData,
+    );
+  } finally {
+    synthesizer.close();
   }
 }
 
@@ -572,6 +650,125 @@ router.post(
     }
   },
 );
+
+router.post("/:id/audio-lecture", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const noteId = String(req.params.id || "");
+    const forceRegenerate = Boolean(req.body?.forceRegenerate);
+
+    const note = await prisma.note.findFirst({
+      where: {
+        id: noteId,
+        userId: req.user!.id,
+      },
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        rawText: true,
+        audioLectureUrl: true,
+      },
+    });
+
+    if (!note) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    if (note.audioLectureUrl && !forceRegenerate) {
+      const hasSasToken = note.audioLectureUrl.includes("?");
+      if (hasSasToken) {
+        return res.json({
+          audioUrl: note.audioLectureUrl,
+          cached: true,
+        });
+      }
+
+      const upgradedSasUrl = createBlobReadSasUrl({ blobUrl: note.audioLectureUrl });
+      await prisma.note.update({
+        where: {
+          id: note.id,
+        },
+        data: {
+          audioLectureUrl: upgradedSasUrl,
+        },
+      });
+
+      return res.json({
+        audioUrl: upgradedSasUrl,
+        cached: true,
+      });
+    }
+
+    const preferredLanguage = await getPreferredLanguage(req.user!.id);
+
+    let lectureScript = "";
+    try {
+      lectureScript = await generateAudioLectureScript({
+        noteContent: note.rawText,
+        preferredLanguage,
+      });
+    } catch (error) {
+      console.error("AUDIO LECTURE SCRIPT ERROR:", error);
+      return res.status(500).json({
+        error: "Failed to generate lecture script",
+        stage: "script",
+      });
+    }
+
+    if (!lectureScript.trim()) {
+      return res.status(500).json({
+        error: "Failed to generate lecture script",
+        stage: "script",
+      });
+    }
+
+    let audioBuffer: Buffer;
+    try {
+      audioBuffer = await synthesizeLectureAudioBuffer(lectureScript);
+    } catch (error) {
+      console.error("AUDIO LECTURE TTS ERROR:", error);
+      return res.status(500).json({
+        error: "Failed to convert script to audio",
+        stage: "tts",
+      });
+    }
+
+    const rawAudioUrl = await uploadBufferToAzureBlob({
+      buffer: audioBuffer,
+      mimeType: "audio/mpeg",
+      userId: note.userId,
+      originalFileName: `${note.title || "lecture"}-audio-lecture.mp3`,
+      folder: "audios",
+    });
+
+    const audioUrl = createBlobReadSasUrl({ blobUrl: rawAudioUrl });
+
+    if (note.audioLectureUrl) {
+      try {
+        await deleteAzureBlobByUrl(note.audioLectureUrl);
+      } catch (cleanupError) {
+        console.error("AUDIO LECTURE OLD BLOB CLEANUP ERROR:", cleanupError);
+      }
+    }
+
+    await prisma.note.update({
+      where: {
+        id: note.id,
+      },
+      data: {
+        audioLectureUrl: audioUrl,
+      },
+    });
+
+    return res.json({
+      audioUrl,
+      cached: false,
+    });
+  } catch (error) {
+    console.error("AUDIO LECTURE ERROR:", error);
+    return res.status(500).json({ error: "Failed to generate audio lecture" });
+  }
+});
 
 // GET SINGLE NOTE
 router.get("/:id", authMiddleware, async (req: AuthRequest, res) => {

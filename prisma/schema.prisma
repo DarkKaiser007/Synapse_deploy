@@ -46,6 +46,7 @@ model Note {
   sourceType    String
   fileUrl       String?
   originalFileName String?
+  audioLectureUrl String?
   pageCount     Int?
   quizzes       Quiz[]
   chatMessages  ChatMessage[]
