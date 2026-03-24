@@ -1,8 +1,8 @@
-import { BarChart3, BookOpen, Clock, FileText, Play, Plus, Target, TrendingUp, Users } from "lucide-react";
+import { BarChart3, BookOpen, Clock, Download, FileText, Play, Plus, Target, TrendingUp, Users, X } from "lucide-react";
 import ActivityHeatmap from "../components/ActivityHeatmap";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/auth";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { apiRequest } from "../services/api";
 import StartSessionModal from "../components/StartSessionModal";
@@ -24,6 +24,7 @@ import {
 } from "recharts";
 
 function Dashboard() {
+  const groupStudyLink = "https://teams.microsoft.com/l/meetup-join/19%3ameeting_OTY0Nj";
   const markdownComponents = {
     strong: ({ children }: { children?: React.ReactNode }) => <strong className="font-bold text-white">{children}</strong>,
     p: ({ children }: { children?: React.ReactNode }) => <p className="mb-2">{children}</p>,
@@ -39,6 +40,30 @@ function Dashboard() {
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
   const { data: performanceData, isLoading: performanceLoading, isRevalidating } = usePerformanceData();
   const [isFabOpen, setIsFabOpen] = useState(false);
+  const [isGroupStudyModalOpen, setIsGroupStudyModalOpen] = useState(false);
+  const [isLinkCopied, setIsLinkCopied] = useState(false);
+  const copyResetTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimerRef.current) {
+        window.clearTimeout(copyResetTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isGroupStudyModalOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsGroupStudyModalOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isGroupStudyModalOpen]);
 
   const startStudySession = () => {
     setIsStartModalOpen(true);
@@ -50,30 +75,55 @@ function Dashboard() {
       icon: FileText,
       angle: 90,
       onClick: () => navigate("/notes"),
-      disabled: false,
     },
     {
       label: "Solo Session",
       icon: Play,
       angle: 120,
       onClick: () => startStudySession(),
-      disabled: false,
     },
     {
       label: "Group Study",
       icon: Users,
       angle: 150,
-      onClick: () => undefined,
-      disabled: true,
+      onClick: () => setIsGroupStudyModalOpen(true),
     },
     {
       label: "Take Quiz",
       icon: BookOpen,
       angle: 180,
       onClick: () => navigate("/quizzes"),
-      disabled: false,
     },
   ];
+
+  const handleCopyGroupStudyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(groupStudyLink);
+      setIsLinkCopied(true);
+
+      if (copyResetTimerRef.current) {
+        window.clearTimeout(copyResetTimerRef.current);
+      }
+
+      copyResetTimerRef.current = window.setTimeout(() => {
+        setIsLinkCopied(false);
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to copy Teams link", error);
+    }
+  };
+
+  const handleDownloadGroupStudyLink = () => {
+    const blob = new Blob([groupStudyLink], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "synapse_group_study.txt";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const handleStartSession = async (payload: {
     subjectId: string | null;
@@ -110,6 +160,84 @@ function Dashboard() {
         />
       )}
 
+      {isGroupStudyModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+          <button
+            type="button"
+            aria-label="Close Group Study modal"
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setIsGroupStudyModalOpen(false)}
+          />
+
+          <div className="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 shadow-2xl shadow-blue-900/30">
+            <button
+              type="button"
+              aria-label="Close Group Study modal"
+              onClick={() => setIsGroupStudyModalOpen(false)}
+              className="absolute top-4 right-4 h-9 w-9 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="pr-12">
+              <h2 className="text-2xl font-bold text-white">Group Study Room</h2>
+              <p className="mt-1 text-gray-300">
+                Join your study group on Microsoft Teams
+              </p>
+            </div>
+
+            <div className="mt-6 rounded-xl border border-white/10 bg-slate-900/70 p-4">
+              <label className="block text-xs uppercase tracking-wide text-gray-400 mb-2">
+                Microsoft Teams Link
+              </label>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <input
+                  type="text"
+                  readOnly
+                  value={groupStudyLink}
+                  className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-blue-200 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleCopyGroupStudyLink();
+                  }}
+                  className="rounded-xl border border-white/20 bg-blue-500/20 px-4 py-2.5 text-sm font-medium text-blue-200 hover:bg-blue-500/30 transition-colors"
+                >
+                  {isLinkCopied ? "✅ Copied!" : "Copy Link"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadGroupStudyLink}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 px-4 py-2.5 text-sm font-medium text-gray-200 hover:bg-white/10 transition-colors"
+                >
+                  <Download className="h-4 w-4" />
+                  Download Link
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsGroupStudyModalOpen(false)}
+                className="rounded-xl border border-white/20 px-5 py-2.5 text-gray-200 hover:bg-white/10 transition-colors"
+              >
+                Close
+              </button>
+              <a
+                href={groupStudyLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-5 py-2.5 text-white font-semibold shadow-lg shadow-blue-500/30 transition-all duration-200 hover:from-blue-500 hover:to-cyan-400"
+              >
+                Open in Teams
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="fixed bottom-24 right-6 z-50">
         {actions.map((action, index) => {
           const radius = 110;
@@ -138,17 +266,10 @@ function Dashboard() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (action.disabled) return;
                     setIsFabOpen(false);
                     action.onClick();
                   }}
-                  disabled={action.disabled}
-                  title={action.disabled ? "Coming Soon" : undefined}
-                  className={
-                    action.disabled
-                      ? "w-12 h-12 rounded-full bg-white/15 text-gray-400 border border-white/20 flex items-center justify-center shadow-lg cursor-not-allowed"
-                      : "w-12 h-12 rounded-full bg-[var(--color-primary)] hover:bg-blue-600 text-white border border-white/20 flex items-center justify-center shadow-lg transition-colors duration-200"
-                  }
+                  className="w-12 h-12 rounded-full bg-[var(--color-primary)] hover:bg-blue-600 text-white border border-white/20 flex items-center justify-center shadow-lg transition-colors duration-200"
                 >
                   <Icon className="h-5 w-5" />
                 </button>
@@ -162,11 +283,6 @@ function Dashboard() {
                 >
                   {action.label}
                 </span>
-                {action.disabled && (
-                  <div className="absolute -top-9 px-2 py-1 rounded bg-black/90 text-white text-[11px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                    Coming Soon
-                  </div>
-                )}
               </div>
             </div>
           );

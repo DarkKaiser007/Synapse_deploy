@@ -64,6 +64,38 @@ const aiDisclaimerText =
 const aiDisclaimerClassName =
   "mt-2 text-center text-xs text-gray-500";
 
+const TOPICS_CACHE_TTL_MS = 60 * 60 * 1000;
+
+interface TopicsPrerequisitesData {
+  relatedTopics: string[];
+  prerequisites: string[];
+}
+
+interface TopicsPrerequisitesCacheEntry {
+  timestamp: number;
+  data: TopicsPrerequisitesData;
+}
+
+function normalizeTopicsPrerequisitesPayload(payload: unknown): TopicsPrerequisitesData {
+  const asObject = (payload || {}) as {
+    relatedTopics?: unknown;
+    prerequisites?: unknown;
+  };
+
+  const normalizeList = (value: unknown, maxItems: number) =>
+    Array.isArray(value)
+      ? value
+          .map((item) => (typeof item === "string" ? item.trim() : ""))
+          .filter(Boolean)
+          .slice(0, maxItems)
+      : [];
+
+  return {
+    relatedTopics: normalizeList(asObject.relatedTopics, 6),
+    prerequisites: normalizeList(asObject.prerequisites, 5),
+  };
+}
+
 const NoteDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -90,6 +122,10 @@ const NoteDetail: React.FC = () => {
   const [lectureDuration, setLectureDuration] = useState(0);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingNote, setDeletingNote] = useState(false);
+  const [topicsPrerequisites, setTopicsPrerequisites] =
+    useState<TopicsPrerequisitesData | null>(null);
+  const [loadingTopicsPrerequisites, setLoadingTopicsPrerequisites] = useState(false);
+  const [showTopicsPrerequisites, setShowTopicsPrerequisites] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
   const lectureAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -97,6 +133,7 @@ const NoteDetail: React.FC = () => {
     if (id) {
       fetchNote();
       void fetchChatHistory(id);
+      void fetchTopicsPrerequisites(id);
     }
   }, [id]);
 
@@ -137,6 +174,74 @@ const NoteDetail: React.FC = () => {
       toast.error("Failed to fetch note");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTopicsPrerequisites = async (noteId: string) => {
+    const cacheKey = `synapse_topics_${noteId}`;
+
+    setLoadingTopicsPrerequisites(true);
+    setShowTopicsPrerequisites(true);
+
+    try {
+      const cachedRaw = localStorage.getItem(cacheKey);
+      if (cachedRaw) {
+        try {
+          const cached = JSON.parse(cachedRaw) as TopicsPrerequisitesCacheEntry;
+          const hasFreshCache =
+            typeof cached?.timestamp === "number" &&
+            Date.now() - cached.timestamp < TOPICS_CACHE_TTL_MS;
+
+          if (hasFreshCache) {
+            const normalizedCached = normalizeTopicsPrerequisitesPayload(cached.data);
+            if (
+              normalizedCached.relatedTopics.length > 0 ||
+              normalizedCached.prerequisites.length > 0
+            ) {
+              setTopicsPrerequisites(normalizedCached);
+              setShowTopicsPrerequisites(true);
+              return;
+            }
+          }
+        } catch {
+          localStorage.removeItem(cacheKey);
+        }
+      }
+
+      const response = await fetch(`/api/notes/${noteId}/topics-prerequisites`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to load related topics and prerequisites");
+      }
+
+      const payload = await response.json().catch(() => null);
+      const normalized = normalizeTopicsPrerequisitesPayload(payload);
+
+      if (
+        normalized.relatedTopics.length === 0 &&
+        normalized.prerequisites.length === 0
+      ) {
+        throw new Error("Empty related topics and prerequisites payload");
+      }
+
+      setTopicsPrerequisites(normalized);
+      setShowTopicsPrerequisites(true);
+      localStorage.setItem(
+        cacheKey,
+        JSON.stringify({
+          timestamp: Date.now(),
+          data: normalized,
+        } as TopicsPrerequisitesCacheEntry),
+      );
+    } catch {
+      setTopicsPrerequisites(null);
+      setShowTopicsPrerequisites(false);
+    } finally {
+      setLoadingTopicsPrerequisites(false);
     }
   };
 
@@ -751,6 +856,56 @@ const NoteDetail: React.FC = () => {
               <ReactMarkdown>{note.rawText}</ReactMarkdown>
             </div>
           </div>
+
+          {(loadingTopicsPrerequisites || showTopicsPrerequisites) && (
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl p-6">
+              <h2 className="text-2xl font-bold text-white mb-5">Related Topics & Prerequisites</h2>
+
+              <section>
+                <h3 className="text-base font-semibold text-blue-300 mb-3">Related Topics</h3>
+                <div className="flex flex-wrap gap-2">
+                  {loadingTopicsPrerequisites
+                    ? Array.from({ length: 6 }).map((_, index) => (
+                        <span
+                          key={`related-skeleton-${index}`}
+                          className="h-8 w-28 animate-pulse rounded-lg border border-white/20 bg-blue-500/20"
+                        />
+                      ))
+                    : topicsPrerequisites?.relatedTopics.map((topic, index) => (
+                        <span
+                          key={`related-${index}-${topic}`}
+                          className="border border-white/20 bg-blue-500/20 text-blue-300 rounded-lg px-3 py-1.5 text-sm"
+                        >
+                          {topic}
+                        </span>
+                      ))}
+                </div>
+              </section>
+
+              <div className="my-6 border-t border-white/10" />
+
+              <section>
+                <h3 className="text-base font-semibold text-blue-300 mb-3">Prerequisites</h3>
+                <div className="flex flex-wrap gap-2">
+                  {loadingTopicsPrerequisites
+                    ? Array.from({ length: 5 }).map((_, index) => (
+                        <span
+                          key={`prereq-skeleton-${index}`}
+                          className="h-8 w-32 animate-pulse rounded-lg border border-white/20 bg-blue-500/20"
+                        />
+                      ))
+                    : topicsPrerequisites?.prerequisites.map((item, index) => (
+                        <span
+                          key={`prereq-${index}-${item}`}
+                          className="border border-white/20 bg-blue-500/20 text-blue-300 rounded-lg px-3 py-1.5 text-sm"
+                        >
+                          {item}
+                        </span>
+                      ))}
+                </div>
+              </section>
+            </div>
+          )}
 
           {/* AI Responses */}
           {aiResponses.length > 0 && (

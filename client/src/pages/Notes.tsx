@@ -93,6 +93,7 @@ const Notes: React.FC = () => {
   const [voiceTargetNoteId, setVoiceTargetNoteId] = useState('');
   const [uploadingVoice, setUploadingVoice] = useState(false);
   const [voiceError, setVoiceError] = useState('');
+  const [showContentRejectedModal, setShowContentRejectedModal] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<BlobPart[]>([]);
   const recordingIntervalRef = useRef<number | null>(null);
@@ -233,6 +234,12 @@ const Notes: React.FC = () => {
         setShowCreateForm(false);
         fetchNotes();
       } else {
+        const errorData = await response.json().catch(() => ({} as { error?: string }));
+        if (errorData?.error === 'CONTENT_REJECTED') {
+          setShowContentRejectedModal(true);
+          return;
+        }
+
         toast.error('Failed to create note');
       }
     } catch (error) {
@@ -488,7 +495,13 @@ const Notes: React.FC = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => ({} as { error?: string }));
+        if (errorData?.error === 'CONTENT_REJECTED') {
+          setShowContentRejectedModal(true);
+          toast.dismiss(toastId);
+          return;
+        }
+
         const message = errorData.error || 'Failed to transcribe recording';
         setVoiceError(message);
         toast.error(message, { id: toastId });
@@ -579,7 +592,13 @@ const Notes: React.FC = () => {
           navigate('/notes');
         }
       } else {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({} as { error?: string }));
+        if (errorData?.error === 'CONTENT_REJECTED') {
+          setShowContentRejectedModal(true);
+          toast.dismiss(toastId);
+          return;
+        }
+
         const errorMsg = errorData.error || `Failed to process ${isPdf ? 'PDF' : 'image'}`;
         setImageError(errorMsg);
         toast.error(errorMsg, { id: toastId });
@@ -824,6 +843,26 @@ const Notes: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showContentRejectedModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-white mb-4">⚠️ Content Not Accepted</h2>
+            <p className="text-gray-200 leading-relaxed">
+              SYNAPSE is designed for educational use and cannot process this content. If you believe this is an error, please review our content guidelines.
+            </p>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowContentRejectedModal(false)}
+                className="px-5 py-2.5 bg-[var(--color-primary)] hover:bg-blue-600 text-white rounded-lg transition-colors"
+              >
+                OK, understood
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1177,8 +1216,8 @@ const Notes: React.FC = () => {
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-white text-lg mb-2">Upload an image or PDF to extract text</p>
-            <p className="text-gray-400">Drag and drop an image or PDF here, or click to browse</p>
+            <p className="text-white text-lg mb-2">Upload an image, PDF or PPT to analyse</p>
+            <p className="text-gray-400">Drag and drop an image, PDF or PPT here, or click to browse</p>
             <input
               ref={fileInputRef}
               type="file"
