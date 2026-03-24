@@ -133,7 +133,7 @@ export function usePerformanceData() {
   });
 }
 
-export function useBrainFatigueData() {
+export function useBrainFatigueData(): { data: BrainFatigueData; isLoading: boolean; isRevalidating: boolean; error: Error | null } {
   // Return mocked data for presentation
   const [data] = useState<BrainFatigueData>(MOCK_BRAIN_FATIGUE_DATA);
   return { 
@@ -144,7 +144,7 @@ export function useBrainFatigueData() {
   };
 }
 
-export function useForgettingCurveData() {
+export function useForgettingCurveData(): { data: ForgettingCurveData; isLoading: boolean; isRevalidating: boolean; error: Error | null } {
   // Return mocked data for presentation
   const [data] = useState<ForgettingCurveData>(MOCK_FORGETTING_CURVE_DATA);
   return { 
