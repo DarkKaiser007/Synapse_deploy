@@ -21,6 +21,7 @@ import Profile from "./pages/Profile";
 import Quizzes from "./pages/Quizzes";
 import QuizAttempt from "./pages/QuizAttempt";
 import Performance from "./pages/Performance";
+import GlobalAssistant from "./components/GlobalAssistant";
 
 // Basic auth pages (will be enhanced later)
 const Login = () => {
@@ -200,6 +201,7 @@ function App() {
   return (
     <Router>
       <Toaster position="top-right" />
+      <GlobalAssistant />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />

@@ -10,6 +10,7 @@ import {
   User,
   LogOut,
   Menu,
+  Shield,
   X
 } from 'lucide-react'
 import { useAuthStore } from '../stores/auth'
@@ -62,9 +63,18 @@ function Layout({ children }: LayoutProps) {
                 <Brain className="h-8 w-8 text-[var(--color-primary)]" />
                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-[var(--color-primary)] rounded-full animate-pulse"></div>
               </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                SYNAPSE
-              </span>
+              <div className="flex flex-col">
+                <span className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                  SYNAPSE
+                </span>
+                <div className="relative group mt-1 inline-flex w-fit items-center gap-1 rounded-md border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-gray-200">
+                  <Shield className="h-3 w-3 text-blue-300" />
+                  <span>Responsible AI</span>
+                  <div className="pointer-events-none absolute left-0 top-full z-30 mt-2 w-72 rounded-lg border border-white/15 bg-slate-900/95 px-3 py-2 text-xs text-gray-200 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                    SYNAPSE uses AI responsibly. All content is moderated to ensure a safe learning environment. AI responses may not always be accurate - always verify important information.
+                  </div>
+                </div>
+              </div>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}

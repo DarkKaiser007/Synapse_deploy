@@ -11,8 +11,13 @@ import {
   ChatMessage,
 } from "../services/aiService";
 import { getPreferredLanguage } from "../services/preferredLanguage";
+import {
+  logModerationRejection,
+  moderateContent,
+} from "../services/contentModeration";
 
 const router = express.Router();
+const MODERATION_REFUSAL_MESSAGE = "I'm sorry, I can't help with that. I'm here to help you study and learn - let's keep our conversation educational! 📚";
 
 router.post("/simplify", authMiddleware, async (req: AuthRequest, res) => {
   try {
@@ -20,6 +25,19 @@ router.post("/simplify", authMiddleware, async (req: AuthRequest, res) => {
 
     if (!content) {
       return res.status(400).json({ error: "Content required" });
+    }
+
+    const moderationResult = await moderateContent(String(content));
+    if (!moderationResult.safe) {
+      logModerationRejection({
+        userId: req.user!.id,
+        category: moderationResult.category,
+        content: String(content),
+      });
+
+      return res
+        .status(400)
+        .json({ error: "CONTENT_REJECTED", message: "Unable to process this content safely." });
     }
 
     const preferredLanguage = await getPreferredLanguage(req.user!.id);
@@ -38,6 +56,19 @@ router.post("/summarize", authMiddleware, async (req: AuthRequest, res) => {
 
     if (!content) {
       return res.status(400).json({ error: "Content required" });
+    }
+
+    const moderationResult = await moderateContent(String(content));
+    if (!moderationResult.safe) {
+      logModerationRejection({
+        userId: req.user!.id,
+        category: moderationResult.category,
+        content: String(content),
+      });
+
+      return res
+        .status(400)
+        .json({ error: "CONTENT_REJECTED", message: "Unable to process this content safely." });
     }
 
     const preferredLanguage = await getPreferredLanguage(req.user!.id);
@@ -79,8 +110,22 @@ router.post("/generate-quiz", authMiddleware, async (req: AuthRequest, res) => {
     }
 
     const preferredLanguage = await getPreferredLanguage(req.user!.id);
+    const quizSourceText = content || note.rawText;
+    const moderationResult = await moderateContent(quizSourceText);
+    if (!moderationResult.safe) {
+      logModerationRejection({
+        userId: req.user!.id,
+        category: moderationResult.category,
+        content: quizSourceText,
+      });
+
+      return res
+        .status(400)
+        .json({ error: "Unable to generate quiz from this content." });
+    }
+
     const questions = await generateQuizQuestions(
-      content || note.rawText,
+      quizSourceText,
       level || 3,
       preferredLanguage,
     );
@@ -119,6 +164,17 @@ router.post("/chat", authMiddleware, async (req: AuthRequest, res) => {
         .json({ error: "noteId and message are required" });
     }
 
+    const moderationResult = await moderateContent(message);
+    if (!moderationResult.safe) {
+      logModerationRejection({
+        userId: req.user!.id,
+        category: moderationResult.category,
+        content: message,
+      });
+
+      return res.json({ result: MODERATION_REFUSAL_MESSAGE });
+    }
+
     const note = await prisma.note.findFirst({
       where: {
         id: noteId,
@@ -154,6 +210,19 @@ router.post("/speak", authMiddleware, async (req: AuthRequest, res) => {
 
     if (!content) {
       return res.status(400).json({ error: "Content required" });
+    }
+
+    const moderationResult = await moderateContent(String(content));
+    if (!moderationResult.safe) {
+      logModerationRejection({
+        userId: req.user!.id,
+        category: moderationResult.category,
+        content: String(content),
+      });
+
+      return res
+        .status(400)
+        .json({ error: "CONTENT_REJECTED", message: "Unable to process this content safely." });
     }
 
     const preferredLanguage = await getPreferredLanguage(req.user!.id);

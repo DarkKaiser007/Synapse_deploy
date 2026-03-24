@@ -24,6 +24,7 @@ export function useCachedSWRData<T>({ cacheKey, cacheTimeKey, fetcher }: UseCach
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRevalidating, setIsRevalidating] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,10 +37,12 @@ export function useCachedSWRData<T>({ cacheKey, cacheTimeKey, fetcher }: UseCach
         setData(cached!.data);
         setIsLoading(false);
         setIsRevalidating(true);
+        setError(null);
       } else {
         setData(null);
         setIsLoading(true);
         setIsRevalidating(false);
+        setError(null);
       }
 
       try {
@@ -48,8 +51,12 @@ export function useCachedSWRData<T>({ cacheKey, cacheTimeKey, fetcher }: UseCach
 
         setData((prev) => (areEqual(prev, fresh) ? prev : fresh));
         writeCacheEntry(cacheKey, cacheTimeKey, fresh);
-      } catch {
+        setError(null);
+      } catch (err) {
         if (cancelled) return;
+        const error = err instanceof Error ? err : new Error(String(err));
+        setError(error);
+        console.error(`Error fetching ${cacheKey}:`, error);
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -65,5 +72,5 @@ export function useCachedSWRData<T>({ cacheKey, cacheTimeKey, fetcher }: UseCach
     };
   }, [cacheKey, cacheTimeKey, fetcher]);
 
-  return { data, isLoading, isRevalidating };
+  return { data, isLoading, isRevalidating, error };
 }

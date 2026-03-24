@@ -4,6 +4,11 @@ import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { extractNotesFromImageBase64 } from '../services/noteVision';
 import prisma from '../prisma';
 import { uploadBufferToAzureBlob } from '../services/fileStorage';
+import {
+  buildContentRejectedResponse,
+  logModerationRejection,
+  moderateContent,
+} from '../services/contentModeration';
 
 const router = express.Router();
 
@@ -100,6 +105,20 @@ router.post('/upload-image', authMiddleware, upload.single('image'), async (req:
     const mimeType = req.file.mimetype || 'image/png';
     const extractedText = await extractNotesFromImageBase64({ base64, mimeType });
     const finalText = extractedText.trim() || 'No text could be extracted from this image.';
+
+    const moderationResult = await moderateContent(finalText);
+    if (!moderationResult.safe) {
+      logModerationRejection({
+        userId: req.user!.id,
+        category: moderationResult.category,
+        content: finalText,
+      });
+
+      return res.status(400).json(
+        buildContentRejectedResponse(moderationResult.category),
+      );
+    }
+
     const originalName = req.file.originalname || 'Uploaded Image';
     const fileUrl = await uploadBufferToAzureBlob({
       buffer: req.file.buffer,

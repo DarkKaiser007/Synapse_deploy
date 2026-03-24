@@ -328,7 +328,7 @@ export async function chatWithNotes(
     messages: [
       {
         role: "system",
-        content: `${languageInstruction}\n\nYou are a helpful study assistant. The student is studying the following notes: ${sanitizedNote}. You can understand user messages in any language, but you must always reply in ${resolvedLanguage}. Answer their questions clearly and helpfully based on these notes and your knowledge.`,
+        content: `${languageInstruction}\n\nYou are a study assistant for students. Refuse any requests that are harmful, illegal, or unrelated to learning. If asked something inappropriate, respond warmly but firmly that you can only help with educational topics.\n\nThe student is studying the following notes: ${sanitizedNote}. You can understand user messages in any language, but you must always reply in ${resolvedLanguage}. Answer their questions clearly and helpfully based on these notes and your knowledge.`,
       },
       ...historyMessages,
       {

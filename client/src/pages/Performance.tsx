@@ -42,11 +42,13 @@ function Performance() {
     data: brainFatigueData,
     isLoading: brainFatigueLoading,
     isRevalidating: isFatigueRevalidating,
+    error: brainFatigueError,
   } = useBrainFatigueData();
   const {
     data: forgettingCurveData,
     isLoading: forgettingCurveLoading,
     isRevalidating: isForgettingCurveRevalidating,
+    error: forgettingCurveError,
   } = useForgettingCurveData();
   const [brainFatigueInfoOpen, setBrainFatigueInfoOpen] = useState(false);
   const [forgettingCurveInfoOpen, setForgettingCurveInfoOpen] = useState(false);
@@ -416,7 +418,7 @@ function Performance() {
         {/* Brain Fatigue Detector */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-white">🧠 Brain Fatigue Detector</h2>
+            <h2 className="text-2xl font-bold text-white">Brain Fatigue Detector</h2>
             {isFatigueRevalidating && (
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <span className="h-3 w-3 rounded-full border border-blue-300 border-t-transparent animate-spin" />
@@ -429,6 +431,23 @@ function Performance() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white/5 rounded-2xl p-6 h-80 animate-pulse" />
               <div className="bg-white/5 rounded-2xl p-6 h-80 animate-pulse" />
+            </div>
+          ) : brainFatigueError ? (
+            <div className="group relative">
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-red-500 to-pink-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000" />
+              <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-300">
+                <div className="flex items-center gap-4">
+                  <div className="p-4 bg-gradient-to-r from-red-500 to-pink-500 rounded-xl">
+                    <AlertCircle className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-white mb-2">Error Loading Brain Fatigue Data</h3>
+                    <p className="text-gray-300">
+                      {brainFatigueError.message || "Failed to load brain fatigue analysis. Please try again later."}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : !brainFatigueData || (brainFatigueData.totalAttempts || 0) < 5 ? (
             <div className="group relative">
@@ -467,20 +486,20 @@ function Performance() {
                     brainFatigueInfoOpen ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
                   }`}
                 >
-                  <p className="text-sm leading-relaxed mb-3">📖 The Science: Research in chronobiology shows that cognitive performance follows your circadian rhythm — your brain's internal 24-hour clock. Most people have a peak performance window of 2-4 hours where focus, memory retention and problem-solving are at their best.</p>
-                  <p className="text-sm font-semibold mb-1">📊 Reading the Hour Chart:</p>
+                  <p className="text-sm leading-relaxed mb-3">The Science: Research in chronobiology shows that cognitive performance follows your circadian rhythm — your brain's internal 24-hour clock. Most people have a peak performance window of 2-4 hours where focus, memory retention and problem-solving are at their best.</p>
+                  <p className="text-sm font-semibold mb-1">Reading the Hour Chart:</p>
                   <ul className="list-disc list-inside text-sm mb-3">
-                    <li>🧠 Peaks (high points) = when your brain is most alert</li>
-                    <li>😴 Valleys (low points) = when mental fatigue sets in</li>
-                    <li>🟩 The green highlighted zone = your optimal study window</li>
+                    <li>Peaks (high points) = when your brain is most alert</li>
+                    <li>Valleys (low points) = when mental fatigue sets in</li>
+                    <li>The green highlighted zone = your optimal study window</li>
                   </ul>
-                  <p className="text-sm font-semibold mb-1">📅 Reading the Day Chart:</p>
+                  <p className="text-sm font-semibold mb-1">Reading the Day Chart:</p>
                   <ul className="list-disc list-inside text-sm mb-3">
-                    <li>📈 Taller bars = better performance on that day</li>
-                    <li>📉 Shorter bars = mental fatigue or distraction on that day</li>
-                    <li>📘 Use this to plan which subjects to study on which days</li>
+                    <li>Taller bars = better performance on that day</li>
+                    <li>Shorter bars = mental fatigue or distraction on that day</li>
+                    <li>Use this to plan which subjects to study on which days</li>
                   </ul>
-                  <p className="text-sm">💡 Pro Tip: Study your hardest subjects during your peak window and use your low-performance hours for light revision or breaks.</p>
+                  <p className="text-sm">Pro Tip: Study your hardest subjects during your peak window and use your low-performance hours for light revision or breaks.</p>
                 </div>
               </div>
 
@@ -612,7 +631,7 @@ function Performance() {
                       <Brain className="h-8 w-8 text-white" />
                     </div>
                     <div>
-                      <h3 className="text-2xl font-bold text-white mb-4">🧠 Neuroscience-Based Study Insights</h3>
+                      <h3 className="text-2xl font-bold text-white mb-4">Neuroscience-Based Study Insights</h3>
                       <div className="text-gray-200 leading-relaxed text-lg">
                         <ReactMarkdown components={markdownComponents}>
                           {brainFatigueData.aiInsights || brainFatigueData.aiInsight || ""}
@@ -629,7 +648,7 @@ function Performance() {
         {/* Forgetting Curve Tracker */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-white">📉 Forgetting Curve Tracker</h2>
+            <h2 className="text-2xl font-bold text-white">Forgetting Curve Tracker</h2>
             {isForgettingCurveRevalidating && (
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <span className="h-3 w-3 rounded-full border border-blue-300 border-t-transparent animate-spin" />
@@ -654,23 +673,23 @@ function Performance() {
                 forgettingCurveInfoOpen ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
               }`}
             >
-              <p className="text-sm leading-relaxed mb-3">📖 The Science: In 1885, psychologist Hermann Ebbinghaus discovered that humans forget information in a predictable pattern called the Forgetting Curve. Without review, we forget: 58% in 24 hours, 65% in a week, 75% in a month.</p>
+              <p className="text-sm leading-relaxed mb-3">The Science: In 1885, psychologist Hermann Ebbinghaus discovered that humans forget information in a predictable pattern called the Forgetting Curve. Without review, we forget: 58% in 24 hours, 65% in a week, 75% in a month.</p>
               <p className="text-sm leading-relaxed mb-3">But YOUR forgetting curve is unique — some people forget faster, some slower. This tracker measures YOUR personal forgetting rate per subject.</p>
-              <p className="text-sm font-semibold mb-1">📊 Reading the Graph:</p>
+              <p className="text-sm font-semibold mb-1">Reading the Graph:</p>
               <ul className="list-disc list-inside text-sm mb-3">
-                <li>🧪 Each colored line = one subject</li>
-                <li>📉 Downward slope = forgetting happening</li>
-                <li>⚡ Steep drop = fast forgetter for that subject</li>
-                <li>🟢 Flat line = good retention for that subject</li>
+                <li>Each colored line = one subject</li>
+                <li>Downward slope = forgetting happening</li>
+                <li>Steep drop = fast forgetter for that subject</li>
+                <li>Flat line = good retention for that subject</li>
               </ul>
-              <p className="text-sm font-semibold mb-1">🚦 Status Badge Guide:</p>
+              <p className="text-sm font-semibold mb-1">Status Badge Guide:</p>
               <ul className="list-disc list-inside text-sm mb-3">
-                <li>✅ Fresh (0-3 days) = Memory is strong, no action needed</li>
-                <li>⚠️ Fading (4-7 days) = Review soon to strengthen memory</li>
-                <li>🔴 Critical (8-14 days) = Review today or risk forgetting</li>
-                <li>💀 Forgotten (14+ days) = Memory likely lost, retake quiz</li>
+                <li>Fresh (0-3 days) = Memory is strong, no action needed</li>
+                <li>Fading (4-7 days) = Review soon to strengthen memory</li>
+                <li>Critical (8-14 days) = Review today or risk forgetting</li>
+                <li>Forgotten (14+ days) = Memory likely lost, retake quiz</li>
               </ul>
-              <p className="text-sm">💡 Spaced Repetition Tip: The best time to review is just BEFORE you forget — not immediately after learning. This is called Spaced Repetition and it's the most scientifically proven study technique.</p>
+              <p className="text-sm">Spaced Repetition Tip: The best time to review is just BEFORE you forget — not immediately after learning. This is called Spaced Repetition and it's the most scientifically proven study technique.</p>
             </div>
           </div>
 
@@ -678,6 +697,23 @@ function Performance() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white/5 rounded-2xl p-6 h-80 animate-pulse" />
               <div className="bg-white/5 rounded-2xl p-6 h-80 animate-pulse" />
+            </div>
+          ) : forgettingCurveError ? (
+            <div className="group relative">
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-red-500 to-pink-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000" />
+              <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-300">
+                <div className="flex items-center gap-4">
+                  <div className="p-4 bg-gradient-to-r from-red-500 to-pink-500 rounded-xl">
+                    <AlertCircle className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-white mb-2">Error Loading Forgetting Curve Data</h3>
+                    <p className="text-gray-300">
+                      {forgettingCurveError.message || "Failed to load forgetting curve analysis. Please try again later."}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : !forgettingCurveData || forgettingCurveData.subjects.length === 0 ? (
             <div className="group relative">
@@ -721,11 +757,24 @@ function Performance() {
                     }
                   };
 
+                  const getStatusLabel = (status: string) => {
+                    switch (status) {
+                      case "fresh": return "Fresh";
+                      case "fading": return "Fading";
+                      case "critical": return "Critical";
+                      case "forgotten": return "Forgotten";
+                      default: return "Unknown";
+                    }
+                  };
+
                   return (
                     <div key={subject.subject} className={`group relative border-2 rounded-2xl p-6 transition-all duration-300 ${getStatusColor(subject.status)}`}>
                       <div className="flex items-start justify-between mb-4">
                         <h3 className="text-lg font-semibold text-white">{subject.subject}</h3>
-                        <span className="text-2xl">{getStatusIcon(subject.status)}</span>
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-2xl">{getStatusIcon(subject.status)}</span>
+                          <span className="text-xs font-medium text-gray-400">{getStatusLabel(subject.status)}</span>
+                        </div>
                       </div>
 
                       <div className="space-y-2 text-sm">
@@ -855,7 +904,7 @@ function Performance() {
                       <Target className="h-8 w-8 text-white" />
                     </div>
                     <div>
-                      <h3 className="text-2xl font-bold text-white mb-4">🧠 Memory Coach Insights</h3>
+                      <h3 className="text-2xl font-bold text-white mb-4">Memory Coach Insights</h3>
                       <div className="text-gray-200 leading-relaxed text-lg">
                         <ReactMarkdown components={markdownComponents}>{forgettingCurveData.aiInsight}</ReactMarkdown>
                       </div>

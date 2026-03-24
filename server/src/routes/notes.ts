@@ -14,6 +14,11 @@ import {
   normalizePreferredLanguage,
 } from "../services/preferredLanguage";
 import { azureOpenAIClient, azureOpenAIModel } from "../services/azureOpenAI";
+import {
+  buildContentRejectedResponse,
+  logModerationRejection,
+  moderateContent,
+} from "../services/contentModeration";
 const speechSdk = require("microsoft-cognitiveservices-speech-sdk");
 const { PDFParse } = require("pdf-parse");
 
@@ -43,6 +48,12 @@ const voiceMap: Record<string, string> = {
 
 const ENGLISH_FALLBACK_LANGUAGE = "English";
 const ENGLISH_FALLBACK_VOICE = "en-US-BrianNeural";
+const TOPICS_PREREQUISITES_SYSTEM_PROMPT = `Analyze the following note content and return a JSON object with exactly this structure, no other text:
+{
+  relatedTopics: string[],      // 4-6 related topics the student could explore
+  prerequisites: string[]       // 3-5 concepts the student should know before studying this
+}
+Keep each item short (3-6 words max). Be specific to the actual content.`;
 
 const buildAudioLectureSystemPrompt = (preferredLanguage: string) =>
   `You are an enthusiastic and clear university tutor. Create an engaging spoken lecture script of approximately 5 minutes (700-800 words) based on the note content provided.
@@ -168,6 +179,33 @@ async function generateAudioLectureScript({
 
 function getVoiceForLanguage(preferredLanguage: string): string {
   return voiceMap[preferredLanguage] || ENGLISH_FALLBACK_VOICE;
+}
+
+function extractJsonObject(text: string): unknown {
+  const fenced = text.match(/```json\s*([\s\S]*?)```/i);
+  const candidate = (fenced?.[1] || text || "").trim();
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error("No JSON object found in model response");
+  }
+
+  return JSON.parse(candidate.slice(start, end + 1));
+}
+
+function normalizeShortStringList(
+  value: unknown,
+  maxItems: number,
+): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+    .slice(0, maxItems);
 }
 
 async function synthesizeLectureAudioBuffer({
@@ -346,6 +384,19 @@ router.post("/text", authMiddleware, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: "Content required" });
     }
 
+    const moderationResult = await moderateContent(String(rawText));
+    if (!moderationResult.safe) {
+      logModerationRejection({
+        userId: req.user!.id,
+        category: moderationResult.category,
+        content: String(rawText),
+      });
+
+      return res.status(400).json(
+        buildContentRejectedResponse(moderationResult.category),
+      );
+    }
+
     const note = await prisma.note.create({
       data: {
         userId: req.user!.id,
@@ -463,6 +514,19 @@ router.post(
         translatedToEnglish,
         translationFailed,
       } = await normalizeVoiceTextToEnglish(transcribedText);
+
+      const moderationResult = await moderateContent(textToSave);
+      if (!moderationResult.safe) {
+        logModerationRejection({
+          userId,
+          category: moderationResult.category,
+          content: textToSave,
+        });
+
+        return res.status(400).json(
+          buildContentRejectedResponse(moderationResult.category),
+        );
+      }
 
       if (mode === "append") {
         const noteId = typeof req.body.noteId === "string" ? req.body.noteId.trim() : "";
@@ -647,6 +711,19 @@ router.post(
         return res.status(400).json({ error: "No text could be extracted from this PDF" });
       }
 
+      const moderationResult = await moderateContent(extractedText);
+      if (!moderationResult.safe) {
+        logModerationRejection({
+          userId: req.user!.id,
+          category: moderationResult.category,
+          content: extractedText,
+        });
+
+        return res.status(400).json(
+          buildContentRejectedResponse(moderationResult.category),
+        );
+      }
+
       const note = await prisma.note.create({
         data: {
           userId: req.user!.id,
@@ -704,6 +781,19 @@ router.post("/:id/audio-lecture", authMiddleware, async (req: AuthRequest, res) 
 
     if (!note) {
       return res.status(404).json({ error: "Note not found" });
+    }
+
+    const moderationResult = await moderateContent(note.rawText);
+    if (!moderationResult.safe) {
+      logModerationRejection({
+        userId: req.user!.id,
+        category: moderationResult.category,
+        content: note.rawText,
+      });
+
+      return res
+        .status(400)
+        .json(buildContentRejectedResponse(moderationResult.category));
     }
 
     const isLanguageCacheMatch =
@@ -859,6 +949,100 @@ router.post("/:id/audio-lecture", authMiddleware, async (req: AuthRequest, res) 
   } catch (error) {
     console.error("AUDIO LECTURE ERROR:", error);
     return res.status(500).json({ error: "Failed to generate audio lecture" });
+  }
+});
+
+router.get("/:id/topics-prerequisites", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const noteId = String(req.params.id || "");
+    const note = await prisma.note.findFirst({
+      where: {
+        id: noteId,
+        userId: req.user!.id,
+      },
+      select: {
+        id: true,
+        rawText: true,
+      },
+    });
+
+    if (!note) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    const moderationResult = await moderateContent(note.rawText);
+    if (!moderationResult.safe) {
+      logModerationRejection({
+        userId: req.user!.id,
+        category: moderationResult.category,
+        content: note.rawText,
+      });
+
+      return res
+        .status(400)
+        .json(buildContentRejectedResponse(moderationResult.category));
+    }
+
+    const preferredLanguage = normalizePreferredLanguage(
+      await getPreferredLanguage(req.user!.id),
+    );
+
+    const completion = await azureOpenAIClient.chat.completions.create({
+      model: azureOpenAIModel,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "topics_prerequisites",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              relatedTopics: {
+                type: "array",
+                items: { type: "string" },
+                minItems: 4,
+                maxItems: 6,
+              },
+              prerequisites: {
+                type: "array",
+                items: { type: "string" },
+                minItems: 3,
+                maxItems: 5,
+              },
+            },
+            required: ["relatedTopics", "prerequisites"],
+            additionalProperties: false,
+          },
+        },
+      } as any,
+      messages: [
+        {
+          role: "system",
+          content: TOPICS_PREREQUISITES_SYSTEM_PROMPT,
+        },
+        {
+          role: "user",
+          content: `Preferred output language: ${preferredLanguage}\n\nNote content:\n${note.rawText}`,
+        },
+      ],
+    });
+
+    const rawResponse = completion.choices[0]?.message?.content || "{}";
+    const parsed = extractJsonObject(rawResponse) as {
+      relatedTopics?: unknown;
+      prerequisites?: unknown;
+    };
+
+    const relatedTopics = normalizeShortStringList(parsed.relatedTopics, 6);
+    const prerequisites = normalizeShortStringList(parsed.prerequisites, 5);
+
+    return res.json({
+      relatedTopics,
+      prerequisites,
+    });
+  } catch (error) {
+    console.error("TOPICS PREREQUISITES ERROR:", error);
+    return res.status(500).json({ error: "Failed to generate related topics and prerequisites" });
   }
 });
 

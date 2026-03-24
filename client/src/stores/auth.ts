@@ -11,6 +11,17 @@ interface AuthState {
   logout: () => void;
 }
 
+async function parseResponseBody(response: Response): Promise<any> {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   token: null,
@@ -25,10 +36,13 @@ export const useAuthStore = create<AuthState>((set) => ({
         body: JSON.stringify({ email, password }),
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Login failed');
+        const errorData = await parseResponseBody(response);
+        throw new Error(errorData?.error || 'Login failed');
       }
-      const data: LoginResponse = await response.json();
+      const data = (await parseResponseBody(response)) as LoginResponse | null;
+      if (!data?.token || !data?.user) {
+        throw new Error('Login failed: invalid server response');
+      }
       set({ user: data.user, token: data.token, isLoading: false });
       localStorage.setItem('token', data.token);
     } catch (error) {
@@ -46,10 +60,13 @@ export const useAuthStore = create<AuthState>((set) => ({
         body: JSON.stringify({ name, email, password }),
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Registration failed');
+        const errorData = await parseResponseBody(response);
+        throw new Error(errorData?.error || 'Registration failed');
       }
-      const data: LoginResponse = await response.json();
+      const data = (await parseResponseBody(response)) as LoginResponse | null;
+      if (!data?.token || !data?.user) {
+        throw new Error('Registration failed: invalid server response');
+      }
       set({ user: data.user, token: data.token, isLoading: false });
       localStorage.setItem('token', data.token);
     } catch (error) {
