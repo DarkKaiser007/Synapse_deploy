@@ -1,8 +1,8 @@
+import "./env"; // MUST be first — loads .env before any service module runs
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
-import dotenv from "dotenv";
 import prisma from "./prisma";
 import { router as authRoutes } from "./routes/auth";
 import notesRoutes from "./routes/notes";
@@ -15,7 +15,7 @@ import studyPlanRoutes from "./routes/studyPlan";
 import examsRoutes from "./routes/exam";
 import quizzesRoutes from "./routes/quizzes";
 
-dotenv.config();
+
 
 const app = express();
 // const prisma = new PrismaClient({});
@@ -28,6 +28,7 @@ app.use(
       "http://localhost:5175",
       "http://localhost:5176",
       "http://localhost:5177",
+      "http://localhost:8000",
     ],
     credentials: true,
   }),
@@ -54,6 +55,10 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+export default app;

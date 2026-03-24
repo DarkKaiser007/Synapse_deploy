@@ -1,8 +1,6 @@
-import dotenv from 'dotenv'
 import { PrismaClient } from './generated'
 
-dotenv.config()
-
+// env is already loaded by ./env (imported first in index.ts)
 const prisma = new PrismaClient()
 
 export default prisma
