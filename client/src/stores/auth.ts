@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { User, LoginResponse } from 'synapse-shared';
+import { clearAllPerformanceCache } from '../services/performanceCache';
 
 interface AuthState {
   user: User | null;
@@ -60,5 +61,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: () => {
     set({ user: null, token: null });
     localStorage.removeItem('token');
+    clearAllPerformanceCache();
   },
 }));

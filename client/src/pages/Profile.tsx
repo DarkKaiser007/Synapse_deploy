@@ -4,10 +4,6 @@ import {
   Mail,
   Calendar,
   Pencil,
-  BookOpen,
-  Clock3,
-  Trophy,
-  Target,
   Plus,
   Trash2,
   Save,
@@ -33,16 +29,6 @@ interface Subject {
   examDate?: string | null;
 }
 
-interface Session {
-  id: string;
-  durationMinutes: number;
-}
-
-interface QuizStats {
-  completedCount: number;
-  averageScore: number;
-}
-
 const LANGUAGE_OPTIONS = [
   "english",
   "hindi",
@@ -60,13 +46,6 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
-
-  const [totalNotes, setTotalNotes] = useState(0);
-  const [totalStudyHours, setTotalStudyHours] = useState(0);
-  const [quizStats, setQuizStats] = useState<QuizStats>({
-    completedCount: 0,
-    averageScore: 0,
-  });
 
   const [accountForm, setAccountForm] = useState({
     name: "",
@@ -86,31 +65,22 @@ export default function Profile() {
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [addingSubject, setAddingSubject] = useState(false);
   const [deletingSubjectId, setDeletingSubjectId] = useState<string | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     const loadProfilePage = async () => {
       setLoading(true);
 
       try {
-        const [profileData, subjectsData, notesData, sessionsData, quizStatsData] =
-          await Promise.all([
-            apiRequest("/auth/profile"),
-            apiRequest("/subjects"),
-            apiRequest("/notes"),
-            apiRequest("/sessions"),
-            apiRequest("/quizzes/stats"),
-          ]);
+        const [profileData, subjectsData] = await Promise.all([
+          apiRequest("/auth/profile"),
+          apiRequest("/subjects"),
+        ]);
 
         const typedProfile = profileData as ProfileData;
         const typedSubjects = (subjectsData as Subject[]) || [];
-        const typedNotes = (notesData as Array<{ id: string }>) || [];
-        const typedSessions = (sessionsData as Session[]) || [];
-        const typedQuizStats = quizStatsData as QuizStats;
-
-        const totalMinutes = typedSessions.reduce(
-          (sum, session) => sum + (session.durationMinutes || 0),
-          0,
-        );
 
         const savedPrefsRaw = localStorage.getItem("pomodoro-preferences");
         const savedPrefs = savedPrefsRaw
@@ -122,9 +92,6 @@ export default function Profile() {
 
         setProfile(typedProfile);
         setSubjects(typedSubjects);
-        setTotalNotes(typedNotes.length);
-        setTotalStudyHours(Math.round((totalMinutes / 60) * 10) / 10);
-        setQuizStats(typedQuizStats);
 
         setAccountForm({
           name: typedProfile.name || "",
@@ -273,6 +240,25 @@ export default function Profile() {
     navigate("/login");
   };
 
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== "DELETE") return;
+
+    setDeletingAccount(true);
+
+    try {
+      await apiRequest("/auth/account", "DELETE");
+      localStorage.clear();
+      logout();
+      toast.success("Your account has been permanently deleted");
+      navigate("/login");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to delete account");
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -319,44 +305,6 @@ export default function Profile() {
               <Pencil className="h-4 w-4" />
               Edit Profile
             </button>
-          </div>
-        </section>
-
-        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <BookOpen className="h-5 w-5 text-blue-300" />
-              <span className="text-xs text-gray-400">Notes</span>
-            </div>
-            <p className="text-3xl font-bold text-white">{totalNotes}</p>
-            <p className="text-sm text-gray-400 mt-1">Total Notes</p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <Clock3 className="h-5 w-5 text-cyan-300" />
-              <span className="text-xs text-gray-400">Hours</span>
-            </div>
-            <p className="text-3xl font-bold text-white">{totalStudyHours}</p>
-            <p className="text-sm text-gray-400 mt-1">Total Study Hours</p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <Trophy className="h-5 w-5 text-green-300" />
-              <span className="text-xs text-gray-400">Completed</span>
-            </div>
-            <p className="text-3xl font-bold text-white">{quizStats.completedCount}</p>
-            <p className="text-sm text-gray-400 mt-1">Quizzes Completed</p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <Target className="h-5 w-5 text-orange-300" />
-              <span className="text-xs text-gray-400">Average</span>
-            </div>
-            <p className="text-3xl font-bold text-white">{quizStats.averageScore}%</p>
-            <p className="text-sm text-gray-400 mt-1">Average Score</p>
           </div>
         </section>
 
@@ -565,14 +513,72 @@ export default function Profile() {
 
         <section className="rounded-2xl border border-red-400/30 bg-red-500/10 backdrop-blur-xl p-6">
           <h2 className="text-xl font-semibold text-red-200 mb-4">Danger Zone</h2>
-          <button
-            onClick={handleSignOut}
-            className="inline-flex items-center gap-2 rounded-xl bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 font-semibold transition-colors"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign Out
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handleSignOut}
+              className="inline-flex items-center gap-2 rounded-xl bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 font-semibold transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </button>
+
+            <button
+              onClick={() => {
+                setDeleteConfirmText("");
+                setIsDeleteModalOpen(true);
+              }}
+              className="inline-flex items-center gap-2 rounded-xl border border-red-400/50 bg-red-900/40 hover:bg-red-900/60 text-red-200 px-5 py-2.5 font-semibold transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Account
+            </button>
+          </div>
         </section>
+
+        {isDeleteModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <button
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setIsDeleteModalOpen(false)}
+              aria-label="Close delete account modal"
+            />
+
+            <div className="relative w-full max-w-lg rounded-2xl border border-red-400/40 bg-slate-950/95 backdrop-blur-xl p-6">
+              <h3 className="text-2xl font-bold text-white mb-3">
+                Are you sure you want to delete your account?
+              </h3>
+              <p className="text-gray-300 mb-4">
+                This action is permanent and cannot be undone. All your notes, quizzes, study sessions and data will be deleted.
+              </p>
+
+              <label className="block text-sm text-gray-300 mb-2">
+                Type DELETE to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(event) => setDeleteConfirmText(event.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-slate-900/75 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-red-500/40 mb-5"
+              />
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  className="rounded-xl border border-white/20 px-4 py-2.5 text-white hover:bg-white/10 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void handleDeleteAccount()}
+                  disabled={deleteConfirmText !== "DELETE" || deletingAccount}
+                  className="rounded-xl bg-red-600 hover:bg-red-500 px-4 py-2.5 text-white font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deletingAccount ? "Deleting..." : "Permanently Delete Account"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

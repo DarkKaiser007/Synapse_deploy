@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import dayjs from "dayjs";
+import { useAuthStore } from "../stores/auth";
 
 // Color scale for minutes studied
 const colorScale = [
@@ -19,16 +20,81 @@ function getColorIdx(mins: number) {
 	return 4;
 }
 
-// Generate mock data: 1 year, 52 weeks x 7 days
-const today = dayjs();
-const days: { date: string; mins: number }[] = [];
-for (let w = 0; w < 52; w++) {
-	for (let d = 0; d < 7; d++) {
-		const date = today.subtract(52 * 7 - (w * 7 + d), "day");
-		// Random study minutes for demo
-		const mins = Math.random() < 0.2 ? 0 : Math.floor(Math.random() * 180);
-		days.push({ date: date.format("YYYY-MM-DD"), mins });
+const TOTAL_DAYS = 52 * 7;
+
+function hashStringToSeed(value: string): number {
+	let hash = 2166136261;
+	for (let i = 0; i < value.length; i++) {
+		hash ^= value.charCodeAt(i);
+		hash = Math.imul(hash, 16777619);
 	}
+	return hash >>> 0;
+}
+
+function mulberry32(seed: number) {
+	let state = seed >>> 0;
+	return () => {
+		state = (state + 0x6d2b79f5) | 0;
+		let t = Math.imul(state ^ (state >>> 15), 1 | state);
+		t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	};
+}
+
+function randomInt(rng: () => number, min: number, max: number) {
+	return min + Math.floor(rng() * (max - min + 1));
+}
+
+function generateDays(userId: string) {
+	const days: { date: string; mins: number }[] = [];
+	const today = dayjs();
+	const rng = mulberry32(hashStringToSeed(`heatmap-${userId}`));
+	const forcedActiveDates = new Set(["2025-12-19", "2025-12-20", "2025-12-21"]);
+
+	for (let i = 0; i < TOTAL_DAYS; i++) {
+		const date = today.subtract(TOTAL_DAYS - 1 - i, "day");
+		const isSunday = date.day() === 0;
+		const isRecent = i >= TOTAL_DAYS - 60;
+
+		// Baseline distribution:
+		// none 62%, l1 20%, l2 10%, l3 5%, l4 3%
+		// Apply slight recency increase and Sunday activity reduction.
+		let activeProbability = 0.4;
+		if (isRecent) activeProbability *= 1.15;
+		if (isSunday) activeProbability *= 0.5;
+
+		const level1Share = 20 / 38;
+		const level2Share = 10 / 38;
+		const level3Share = 5 / 38;
+		const level4Share = 3 / 38;
+
+		const p1 = activeProbability * level1Share;
+		const p2 = activeProbability * level2Share;
+		const p3 = activeProbability * level3Share;
+		const p4 = activeProbability * level4Share;
+
+		const roll = rng();
+		let mins = 0;
+
+		if (roll < p1) {
+			mins = randomInt(rng, 1, 30);
+		} else if (roll < p1 + p2) {
+			mins = randomInt(rng, 31, 60);
+		} else if (roll < p1 + p2 + p3) {
+			mins = randomInt(rng, 61, 120);
+		} else if (roll < p1 + p2 + p3 + p4) {
+			mins = randomInt(rng, 121, 180);
+		}
+
+		const dateKey = date.format("YYYY-MM-DD");
+		if (forcedActiveDates.has(dateKey) && mins === 0) {
+			mins = randomInt(rng, 18, 52);
+		}
+
+		days.push({ date: dateKey, mins });
+	}
+
+	return days;
 }
 
 // Calculate streaks
@@ -49,12 +115,13 @@ function calcStreaks(days: { date: string; mins: number }[]) {
 	return { current, longest, total };
 }
 
-const streaks = calcStreaks(days);
-
 const cellSize = 14;
 const cellGap = 3;
 
 export default function ActivityHeatmap() {
+	const userId = useAuthStore((state) => state.user?.id || "guest");
+	const days = useMemo(() => generateDays(userId), [userId]);
+	const streaks = useMemo(() => calcStreaks(days), [days]);
 	const [hovered, setHovered] = useState<null | { date: string; mins: number }>(null);
 
 	return (

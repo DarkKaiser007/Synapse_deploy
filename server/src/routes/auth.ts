@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import prisma from "../prisma";
 import { authMiddleware, AuthRequest as MiddlewareAuthRequest } from "../middleware/auth";
 import { RegisterRequest, AuthRequest, LoginResponse } from "synapse-shared";
+import { deleteAzureBlobByUrl } from "../services/fileStorage";
 
 const router = express.Router();
 
@@ -163,6 +164,94 @@ router.put("/profile", authMiddleware, async (req: MiddlewareAuthRequest, res) =
   } catch (error) {
     console.error("Profile update error:", error);
     res.status(500).json({ error: "Failed to update profile" });
+  }
+});
+
+router.delete("/account", authMiddleware, async (req: MiddlewareAuthRequest, res) => {
+  try {
+    const userId = req.user.id;
+
+    await prisma.$transaction(async (tx) => {
+      const userNotes = await tx.note.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          fileUrl: true,
+          audioLectureUrl: true,
+        },
+      });
+
+      // 1) ChatMessages
+      await tx.chatMessage.deleteMany({
+        where: { userId },
+      });
+
+      // 2) QuizAttempts
+      await tx.quizAttempt.deleteMany({
+        where: {
+          OR: [
+            { userId },
+            {
+              quiz: {
+                note: {
+                  userId,
+                },
+              },
+            },
+          ],
+        },
+      });
+
+      // 3) StudySessions
+      await tx.studySession.deleteMany({
+        where: { userId },
+      });
+
+      // Additional dependent rows tied to user notes.
+      await tx.quiz.deleteMany({
+        where: {
+          note: {
+            userId,
+          },
+        },
+      });
+
+      // 4) Notes (and Azure Blob files)
+      for (const note of userNotes) {
+        if (note.fileUrl) {
+          await deleteAzureBlobByUrl(note.fileUrl);
+        }
+        if (note.audioLectureUrl) {
+          await deleteAzureBlobByUrl(note.audioLectureUrl);
+        }
+      }
+
+      await tx.note.deleteMany({
+        where: { userId },
+      });
+
+      await tx.subject.deleteMany({
+        where: { userId },
+      });
+
+      await tx.studyPlan.deleteMany({
+        where: { userId },
+      });
+
+      await tx.exam.deleteMany({
+        where: { userId },
+      });
+
+      // 5) User record
+      await tx.user.delete({
+        where: { id: userId },
+      });
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("DELETE ACCOUNT ERROR:", error);
+    res.status(500).json({ error: "Failed to delete account" });
   }
 });
 export { router };

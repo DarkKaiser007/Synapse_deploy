@@ -2,6 +2,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { apiRequest } from "../services/api";
+import { clearAllPerformanceCache } from "../services/performanceCache";
 
 const MOTIVATIONAL_MESSAGES = [
   "You've got this! Stay focused!",
@@ -168,6 +169,7 @@ export default function StudySession() {
         durationMinutes: minutes,
         type: "MANUAL",
       });
+      clearAllPerformanceCache();
     } catch (error) {
       console.error("Failed to log session:", error);
     }

@@ -1,4 +1,5 @@
 import { apiRequest } from "./api";
+import { clearAllPerformanceCache } from "./performanceCache";
 
 export interface QuizListItem {
   id: string;
@@ -41,6 +42,34 @@ export interface PerformanceData {
   scoreDistribution: { range: string; count: number }[];
 }
 
+export interface BrainFatigueData {
+  byHour: { hour: number; averageScore: number; attempts: number }[];
+  byDay: { day: string; averageScore: number; attempts: number }[];
+  peakHour: number;
+  worstHour: number;
+  peakDay: string;
+  worstDay: string;
+  fatigueDropPercent: number;
+  aiInsight?: string;
+  aiInsights?: string;
+  totalAttempts?: number;
+}
+
+export interface ForgettingCurveData {
+  subjects: {
+    subject: string;
+    latestScore: number;
+    daysSinceLastAttempt: number;
+    forgettingRate: number;
+    predictedScoreTomorrow: number;
+    predictedScoreIn7Days: number;
+    status: "fresh" | "fading" | "critical" | "forgotten";
+    allAttempts: { date: string; score: number }[];
+  }[];
+  mostAtRisk: string | null;
+  aiInsight: string;
+}
+
 export interface QuizBreakdownItem {
   quizId: string;
   subject: string;
@@ -65,22 +94,18 @@ export async function saveQuizAttempt(
   quizId: string,
   payload: { answers: number[]; score: number },
 ) {
-  return apiRequest(`/quizzes/${quizId}/attempt`, "POST", payload) as Promise<{
+  const result = (await apiRequest(`/quizzes/${quizId}/attempt`, "POST", payload)) as {
     score: number;
-  }>;
+  };
+
+  // Ensure analytics refresh after a newly completed quiz attempt.
+  clearAllPerformanceCache();
+
+  return result;
 }
 
 export async function fetchBrainFatigue() {
-  return apiRequest("/quizzes/brain-fatigue") as Promise<{
-    byHour: { hour: number; averageScore: number; attempts: number }[];
-    byDay: { day: string; averageScore: number; attempts: number }[];
-    peakHour: number;
-    worstHour: number;
-    peakDay: string;
-    worstDay: string;
-    fatigueDropPercent: number;
-    aiInsight: string;
-  }>;
+  return apiRequest("/quizzes/brain-fatigue") as Promise<BrainFatigueData>;
 }
 
 export async function fetchPerformance() {
@@ -88,18 +113,5 @@ export async function fetchPerformance() {
 }
 
 export async function fetchForgettingCurve() {
-  return apiRequest("/quizzes/forgetting-curve") as Promise<{
-    subjects: {
-      subject: string;
-      latestScore: number;
-      daysSinceLastAttempt: number;
-      forgettingRate: number;
-      predictedScoreTomorrow: number;
-      predictedScoreIn7Days: number;
-      status: "fresh" | "fading" | "critical" | "forgotten";
-      allAttempts: { date: string; score: number }[];
-    }[];
-    mostAtRisk: string | null;
-    aiInsight: string;
-  }>;
+  return apiRequest("/quizzes/forgetting-curve") as Promise<ForgettingCurveData>;
 }

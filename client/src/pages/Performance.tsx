@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { BarChart3, TrendingUp, Award, AlertCircle, ChevronDown, ChevronUp, Brain, Calendar, Clock, TrendingDown, BookOpen, Target, Zap } from "lucide-react";
-import toast from "react-hot-toast";
+import ReactMarkdown from "react-markdown";
 import {
   LineChart,
   Line,
@@ -21,17 +21,33 @@ import {
   PolarRadiusAxis,
   Radar,
 } from "recharts";
-import { fetchPerformance, fetchBrainFatigue, fetchForgettingCurve, type PerformanceData } from "../services/quizzes";
+import { useBrainFatigueData, useForgettingCurveData, usePerformanceData } from "../hooks/usePerformanceData";
 
 function Performance() {
-  const [data, setData] = useState<PerformanceData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const markdownComponents = {
+    strong: ({ children }: { children?: React.ReactNode }) => <strong className="font-bold text-white">{children}</strong>,
+    p: ({ children }: { children?: React.ReactNode }) => <p className="mb-2">{children}</p>,
+    ol: ({ children }: { children?: React.ReactNode }) => <ol className="list-decimal list-inside space-y-1 mt-2">{children}</ol>,
+    ul: ({ children }: { children?: React.ReactNode }) => <ul className="list-disc list-inside space-y-1 mt-2">{children}</ul>,
+    li: ({ children }: { children?: React.ReactNode }) => <li className="ml-2">{children}</li>,
+  };
+
+  const {
+    data,
+    isLoading: loading,
+    isRevalidating: isPerformanceRevalidating,
+  } = usePerformanceData();
   const [expandedSubjects, setExpandedSubjects] = useState<Set<string>>(new Set());
-  const [brainFatigueData, setBrainFatigueData] = useState<any>(null);
-  const [brainFatigueLoading, setBrainFatigueLoading] = useState(true);
-  const [forgettingCurveData, setForgettingCurveData] = useState<any>(null);
-  const [forgettingCurveLoading, setForgettingCurveLoading] = useState(true);
+  const {
+    data: brainFatigueData,
+    isLoading: brainFatigueLoading,
+    isRevalidating: isFatigueRevalidating,
+  } = useBrainFatigueData();
+  const {
+    data: forgettingCurveData,
+    isLoading: forgettingCurveLoading,
+    isRevalidating: isForgettingCurveRevalidating,
+  } = useForgettingCurveData();
   const [brainFatigueInfoOpen, setBrainFatigueInfoOpen] = useState(false);
   const [forgettingCurveInfoOpen, setForgettingCurveInfoOpen] = useState(false);
 
@@ -52,122 +68,13 @@ function Performance() {
     return `${formatHour(start)} - ${formatHour(end)}`;
   };
 
-
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        setBrainFatigueLoading(true);
-        setForgettingCurveLoading(true);
-
-        // Fetch performance data
-        const perfData = await fetchPerformance();
-        setData(perfData);
-
-        // Fetch brain fatigue data
-        try {
-          const fatigueData = await fetchBrainFatigue();
-          setBrainFatigueData(fatigueData);
-        } catch (fatigueError) {
-          console.error("Failed to load brain fatigue data:", fatigueError);
-          // Don't set error state for brain fatigue, just leave it null
-        } finally {
-          setBrainFatigueLoading(false);
-        }
-
-        // Fetch forgetting curve data
-        try {
-          const curveData = await fetchForgettingCurve();
-          setForgettingCurveData(curveData);
-        } catch (curveError) {
-          console.error("Failed to load forgetting curve data:", curveError);
-          // Don't set error state for forgetting curve, just leave it null
-        } finally {
-          setForgettingCurveLoading(false);
-        }
-      } catch (err) {
-        console.error("Failed to load performance data:", err);
-        toast.error("Failed to load performance data");
-        setError("Failed to load performance data");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void loadData();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="px-6 pt-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Header skeleton */}
-          <div className="mb-8">
-            <div className="h-10 w-48 bg-white/5 rounded-lg animate-pulse mb-2" />
-            <div className="h-5 w-80 bg-white/5 rounded-lg animate-pulse" />
-          </div>
-
-          {/* Stats cards skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-white/5 rounded-2xl p-6 h-24 animate-pulse" />
-            ))}
-          </div>
-
-          {/* Charts skeleton */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div className="bg-white/5 rounded-2xl p-6 h-80 animate-pulse" />
-            <div className="bg-white/5 rounded-2xl p-6 h-80 animate-pulse" />
-          </div>
-
-          {/* AI Analysis skeleton */}
-          <div className="bg-white/5 rounded-2xl p-6 h-48 animate-pulse" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <div className="px-6 pt-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center min-h-96">
-            <div className="text-center">
-              <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-white mb-2">Error Loading Data</h2>
-              <p className="text-gray-400">{error || "An error occurred while loading your performance data"}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Empty state
-  if (data.totalQuizzes === 0) {
-    return (
-      <div className="px-6 pt-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="pt-6 mb-8">
-            <h1 className="text-4xl font-bold text-white mb-2">Quiz Performance</h1>
-            <p className="text-gray-400 text-lg">Track your quiz performance and progress</p>
-          </div>
-
-          <div className="flex items-center justify-center min-h-96">
-            <div className="text-center">
-              <BarChart3 className="h-16 w-16 text-gray-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-white mb-2">No Quizzes Yet</h2>
-              <p className="text-gray-400 mb-6">Start taking quizzes to see your performance metrics here</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const showMainLoading = loading;
+  const showMainError = !loading && !data;
+  const showMainEmpty = !loading && Boolean(data) && data.totalQuizzes === 0;
 
   // Prepare chart data
-  const correctTotal = data.topicBreakdown.reduce((sum, item) => sum + item.correct, 0);
-  const incorrectTotal = data.topicBreakdown.reduce((sum, item) => sum + item.incorrect, 0);
+  const correctTotal = (data?.topicBreakdown || []).reduce((sum, item) => sum + item.correct, 0);
+  const incorrectTotal = (data?.topicBreakdown || []).reduce((sum, item) => sum + item.incorrect, 0);
   const pieData =
     correctTotal + incorrectTotal > 0
       ? [
@@ -190,16 +97,16 @@ function Performance() {
   };
 
   // Group quiz breakdown by subject
-  const quizzesBySubject = data.quizBreakdown.reduce((acc, quiz) => {
+  const quizzesBySubject = (data?.quizBreakdown || []).reduce((acc, quiz) => {
     if (!acc[quiz.subject]) {
       acc[quiz.subject] = [];
     }
     acc[quiz.subject].push(quiz);
     return acc;
-  }, {} as Record<string, typeof data.quizBreakdown>);
+  }, {} as Record<string, NonNullable<typeof data>["quizBreakdown"]>);
 
   // Prepare radar chart data
-  const radarData = data.scoreBySubject.map((subject) => ({
+  const radarData = (data?.scoreBySubject || []).map((subject) => ({
     subject: subject.subject,
     score: subject.averageScore,
   }));
@@ -239,10 +146,51 @@ function Performance() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="pt-6 mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Quiz Performance</h1>
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-4xl font-bold text-white">Quiz Performance</h1>
+            {isPerformanceRevalidating && (
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <span className="h-3 w-3 rounded-full border border-blue-300 border-t-transparent animate-spin" />
+                Updating
+              </div>
+            )}
+          </div>
           <p className="text-gray-400 text-lg">Track your quiz performance and progress</p>
         </div>
 
+        {showMainLoading ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="bg-white/5 rounded-2xl p-6 h-24 animate-pulse" />
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <div className="bg-white/5 rounded-2xl p-6 h-80 animate-pulse" />
+              <div className="bg-white/5 rounded-2xl p-6 h-80 animate-pulse" />
+            </div>
+
+            <div className="bg-white/5 rounded-2xl p-6 h-48 animate-pulse mb-8" />
+          </>
+        ) : showMainError ? (
+          <div className="flex items-center justify-center min-h-96 mb-8">
+            <div className="text-center">
+              <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-white mb-2">Error Loading Data</h2>
+              <p className="text-gray-400">An error occurred while loading your performance data</p>
+            </div>
+          </div>
+        ) : showMainEmpty ? (
+          <div className="flex items-center justify-center min-h-96 mb-8">
+            <div className="text-center">
+              <BarChart3 className="h-16 w-16 text-gray-500 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-white mb-2">No Quizzes Yet</h2>
+              <p className="text-gray-400 mb-6">Start taking quizzes to see your performance metrics here</p>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* Stat Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatCard
@@ -281,7 +229,9 @@ function Performance() {
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-white mb-4">AI Study Coach Analysis</h2>
-                <p className="text-gray-200 leading-relaxed text-lg">{data.aiAnalysis}</p>
+                <div className="text-gray-200 leading-relaxed text-lg">
+                  <ReactMarkdown components={markdownComponents}>{data.aiAnalysis}</ReactMarkdown>
+                </div>
               </div>
             </div>
           </div>
@@ -460,9 +410,20 @@ function Performance() {
           </div>
         </div>
 
+          </>
+        )}
+
         {/* Brain Fatigue Detector */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-white mb-6">🧠 Brain Fatigue Detector</h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-white">🧠 Brain Fatigue Detector</h2>
+            {isFatigueRevalidating && (
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <span className="h-3 w-3 rounded-full border border-blue-300 border-t-transparent animate-spin" />
+                Updating
+              </div>
+            )}
+          </div>
           
           {brainFatigueLoading ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -652,7 +613,11 @@ function Performance() {
                     </div>
                     <div>
                       <h3 className="text-2xl font-bold text-white mb-4">🧠 Neuroscience-Based Study Insights</h3>
-                      <p className="text-gray-200 leading-relaxed text-lg">{brainFatigueData.aiInsights}</p>
+                      <div className="text-gray-200 leading-relaxed text-lg">
+                        <ReactMarkdown components={markdownComponents}>
+                          {brainFatigueData.aiInsights || brainFatigueData.aiInsight || ""}
+                        </ReactMarkdown>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -663,7 +628,15 @@ function Performance() {
 
         {/* Forgetting Curve Tracker */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-white mb-6">📉 Forgetting Curve Tracker</h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-white">📉 Forgetting Curve Tracker</h2>
+            {isForgettingCurveRevalidating && (
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <span className="h-3 w-3 rounded-full border border-blue-300 border-t-transparent animate-spin" />
+                Updating
+              </div>
+            )}
+          </div>
 
           {/* Forgetting Curve “How to Read This” */}
           <div className="mb-6">
@@ -883,7 +856,9 @@ function Performance() {
                     </div>
                     <div>
                       <h3 className="text-2xl font-bold text-white mb-4">🧠 Memory Coach Insights</h3>
-                      <p className="text-gray-200 leading-relaxed text-lg">{forgettingCurveData.aiInsight}</p>
+                      <div className="text-gray-200 leading-relaxed text-lg">
+                        <ReactMarkdown components={markdownComponents}>{forgettingCurveData.aiInsight}</ReactMarkdown>
+                      </div>
                     </div>
                   </div>
                 </div>

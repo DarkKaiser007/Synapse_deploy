@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Play, Pause, RotateCcw, Minimize2, Clock } from 'lucide-react';
 import { usePomodoroStore, type PomodoroMode } from '../stores/pomodoro';
+import { clearAllPerformanceCache } from '../services/performanceCache';
 
 const PomodoroTimer: React.FC = () => {
   const {
@@ -103,7 +104,7 @@ const PomodoroTimer: React.FC = () => {
   const logSession = async () => {
     if (selectedSubjectId) {
       try {
-        await fetch('/api/sessions', {
+        const response = await fetch('/api/sessions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -115,6 +116,10 @@ const PomodoroTimer: React.FC = () => {
             type: 'POMODORO',
           }),
         });
+
+        if (response.ok) {
+          clearAllPerformanceCache();
+        }
       } catch (error) {
         console.error('Failed to log session:', error);
       }

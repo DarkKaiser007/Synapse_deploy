@@ -1,21 +1,79 @@
-import { BookOpen, Clock, Target, TrendingUp } from "lucide-react";
+import { BarChart3, BookOpen, Clock, FileText, Play, Plus, Target, TrendingUp, Users } from "lucide-react";
 import ActivityHeatmap from "../components/ActivityHeatmap";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/auth";
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { apiRequest } from "../services/api";
 import StartSessionModal from "../components/StartSessionModal";
+import { usePerformanceData } from "../hooks/usePerformanceData";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
+  Radar,
+  RadarChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 function Dashboard() {
+  const markdownComponents = {
+    strong: ({ children }: { children?: React.ReactNode }) => <strong className="font-bold text-white">{children}</strong>,
+    p: ({ children }: { children?: React.ReactNode }) => <p className="mb-2">{children}</p>,
+    ol: ({ children }: { children?: React.ReactNode }) => <ol className="list-decimal list-inside space-y-1 mt-2">{children}</ol>,
+    ul: ({ children }: { children?: React.ReactNode }) => <ul className="list-disc list-inside space-y-1 mt-2">{children}</ul>,
+    li: ({ children }: { children?: React.ReactNode }) => <li className="ml-2">{children}</li>,
+  };
+
   // TODO: Replace with actual user from auth store
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const firstName = user?.name?.split(" ")[0] || "there";
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
+  const { data: performanceData, isLoading: performanceLoading, isRevalidating } = usePerformanceData();
+  const [isFabOpen, setIsFabOpen] = useState(false);
 
   const startStudySession = () => {
     setIsStartModalOpen(true);
   };
+
+  const actions = [
+    {
+      label: "Create Note",
+      icon: FileText,
+      angle: 90,
+      onClick: () => navigate("/notes"),
+      disabled: false,
+    },
+    {
+      label: "Solo Session",
+      icon: Play,
+      angle: 120,
+      onClick: () => startStudySession(),
+      disabled: false,
+    },
+    {
+      label: "Group Study",
+      icon: Users,
+      angle: 150,
+      onClick: () => undefined,
+      disabled: true,
+    },
+    {
+      label: "Take Quiz",
+      icon: BookOpen,
+      angle: 180,
+      onClick: () => navigate("/quizzes"),
+      disabled: false,
+    },
+  ];
 
   const handleStartSession = async (payload: {
     subjectId: string | null;
@@ -37,8 +95,97 @@ function Dashboard() {
     navigate(`/study-session?time=${payload.durationMinutes}&subject=${payload.subjectId}&subjectName=${encodeURIComponent(payload.subjectName)}`);
   };
 
+  const radarData = (performanceData?.scoreBySubject || []).map((subject) => ({
+    subject: subject.subject,
+    score: subject.averageScore,
+  }));
+
   return (
-    <div className="px-6 pt-6">
+    <div className="px-6 pt-6 pb-16">
+      {isFabOpen && (
+        <button
+          aria-label="Close action menu"
+          onClick={() => setIsFabOpen(false)}
+          className="fixed inset-0 z-40 bg-black/35"
+        />
+      )}
+
+      <div className="fixed bottom-24 right-6 z-50">
+        {actions.map((action, index) => {
+          const radius = 110;
+          const angleInRadians = (action.angle * Math.PI) / 180;
+          const x = Math.cos(angleInRadians) * radius;
+          const y = -Math.sin(angleInRadians) * radius;
+          const Icon = action.icon;
+
+          return (
+            <div
+              key={action.label}
+              className="absolute top-0 right-0 flex flex-col items-center"
+              style={{
+                transform: isFabOpen
+                  ? `translate(${x}px, ${y}px) scale(1)`
+                  : "translate(0px, 0px) scale(0.7)",
+                opacity: isFabOpen ? 1 : 0,
+                transitionProperty: "transform, opacity",
+                transitionDuration: "260ms",
+                transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+                transitionDelay: isFabOpen ? `${index * 50}ms` : "0ms",
+                pointerEvents: isFabOpen ? "auto" : "none",
+              }}
+            >
+              <div className="relative group flex items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (action.disabled) return;
+                    setIsFabOpen(false);
+                    action.onClick();
+                  }}
+                  disabled={action.disabled}
+                  title={action.disabled ? "Coming Soon" : undefined}
+                  className={
+                    action.disabled
+                      ? "w-12 h-12 rounded-full bg-white/15 text-gray-400 border border-white/20 flex items-center justify-center shadow-lg cursor-not-allowed"
+                      : "w-12 h-12 rounded-full bg-[var(--color-primary)] hover:bg-blue-600 text-white border border-white/20 flex items-center justify-center shadow-lg transition-colors duration-200"
+                  }
+                >
+                  <Icon className="h-5 w-5" />
+                </button>
+                <span
+                  className="absolute px-2.5 py-1 rounded-full bg-black/80 text-xs text-gray-200 whitespace-nowrap pointer-events-none"
+                  style={{
+                    right: action.label === "Create Note" ? "calc(100% + 2px)" : "calc(100% + 8px)",
+                    top: action.label === "Create Note" ? "calc(50% - 30px)" : "50%",
+                    transform: "translateY(-50%)",
+                  }}
+                >
+                  {action.label}
+                </span>
+                {action.disabled && (
+                  <div className="absolute -top-9 px-2 py-1 rounded bg-black/90 text-white text-[11px] opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+                    Coming Soon
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        <button
+          type="button"
+          onClick={() => setIsFabOpen((prev) => !prev)}
+          aria-label={isFabOpen ? "Close quick actions" : "Open quick actions"}
+          className="relative p-3 rounded-full bg-[var(--color-primary)] hover:bg-blue-600 text-white border border-white/20 shadow-lg transition-colors duration-200 flex items-center justify-center"
+        >
+          <Plus
+            className={`h-6 w-6 transition-transform duration-300 ease-out ${
+              isFabOpen ? "rotate-45" : "rotate-0"
+            }`}
+          />
+        </button>
+      </div>
+
       <StartSessionModal
         isOpen={isStartModalOpen}
         onClose={() => setIsStartModalOpen(false)}
@@ -96,7 +243,7 @@ function Dashboard() {
                   <Target className="h-8 w-8 text-orange-400" />
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-white">8</p>
+                  <p className="text-3xl font-bold text-white">{performanceData?.totalQuizzes ?? "--"}</p>
                   <p className="text-gray-400 text-sm">Quizzes Completed</p>
                 </div>
               </div>
@@ -111,7 +258,9 @@ function Dashboard() {
                   <TrendingUp className="h-8 w-8 text-cyan-400" />
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-white">85%</p>
+                  <p className="text-3xl font-bold text-white">
+                    {performanceData ? `${performanceData.averageScore}%` : "--"}
+                  </p>
                   <p className="text-gray-400 text-sm">Average Score</p>
                 </div>
               </div>
@@ -122,67 +271,137 @@ function Dashboard() {
         {/* Activity Heatmap */}
         <ActivityHeatmap />
 
-        {/* Quick Actions & Recent Activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
-            <h2 className="text-2xl font-semibold text-white mb-6">
-              Quick Actions
-            </h2>
-            <div className="space-y-4">
-              <button
-                onClick={() => navigate("/notes")}
-                className="w-full bg-[var(--color-primary)] hover:bg-blue-600 text-white px-6 py-4 rounded-xl transition-all duration-200 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105 text-left font-medium"
-              >
-                Create New Note
-              </button>
-              <button
-                onClick={startStudySession}
-                className="w-full bg-[var(--color-primary)] hover:bg-blue-600 text-white px-6 py-4 rounded-xl transition-all duration-200 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105 text-left font-medium"
-              >
-                Start Study Session
-              </button>
-              <button
-                onClick={() => navigate("/quizzes")}
-                className="w-full bg-[var(--color-primary)] hover:bg-blue-600 text-white px-6 py-4 rounded-xl transition-all duration-200 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105 text-left font-medium"
-              >
-                Generate Quiz
-              </button>
-            </div>
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-white">Performance Overview</h2>
+            {isRevalidating && (
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <span className="h-3 w-3 rounded-full border border-blue-300 border-t-transparent animate-spin" />
+                Updating
+              </div>
+            )}
           </div>
 
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
-            <h2 className="text-2xl font-semibold text-white mb-6">
-              Recent Activity
-            </h2>
-            <div className="space-y-4">
-              <div className="flex items-center p-3 rounded-xl bg-white/5 backdrop-blur-sm">
-                <div className="w-3 h-3 bg-[var(--color-primary)] rounded-full mr-4"></div>
-                <div>
-                  <span className="text-white text-sm">
-                    Completed "Data Structures" quiz - 92%
-                  </span>
-                  <p className="text-gray-400 text-xs">2 hours ago</p>
-                </div>
+          {performanceLoading ? (
+            <>
+              <div className="group relative mb-8">
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 rounded-2xl blur opacity-20" />
+                <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 h-44 animate-pulse" />
               </div>
-              <div className="flex items-center p-3 rounded-xl bg-white/5 backdrop-blur-sm">
-                <div className="w-3 h-3 bg-green-400 rounded-full mr-4"></div>
-                <div>
-                  <span className="text-white text-sm">
-                    Added notes for "Machine Learning" subject
-                  </span>
-                  <p className="text-gray-400 text-xs">1 day ago</p>
-                </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <div className="lg:col-span-2 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl h-[360px] animate-pulse" />
+                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl h-[360px] animate-pulse" />
               </div>
-              <div className="flex items-center p-3 rounded-xl bg-white/5 backdrop-blur-sm">
-                <div className="w-3 h-3 bg-yellow-400 rounded-full mr-4"></div>
-                <div>
-                  <span className="text-white text-sm">
-                    Study session: 45 minutes focused
-                  </span>
-                  <p className="text-gray-400 text-xs">2 days ago</p>
-                </div>
-              </div>
+            </>
+          ) : !performanceData || performanceData.totalQuizzes === 0 ? (
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 text-center mb-6">
+              <p className="text-gray-300">Complete some quizzes to see your analytics here</p>
             </div>
+          ) : (
+            <>
+              <div className="group relative mb-8">
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 rounded-2xl blur opacity-30 group-hover:opacity-50 transition duration-1000" />
+                <div className="relative bg-gradient-to-r from-purple-600/20 via-pink-600/20 to-red-600/20 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/5 transition-all duration-300">
+                  <div className="flex items-start gap-4">
+                    <div className="p-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex-shrink-0">
+                      <BarChart3 className="h-8 w-8 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-white mb-4">AI Study Coach Analysis</h2>
+                      <div className="text-gray-200 leading-relaxed text-lg">
+                        <ReactMarkdown components={markdownComponents}>
+                          {performanceData.aiAnalysis}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <div className="lg:col-span-2 group relative">
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000" />
+                  <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all duration-300">
+                    <h2 className="text-xl font-semibold text-white mb-6">Score Trend Over Time</h2>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={performanceData.scoreOverTime}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                        <XAxis dataKey="date" stroke="rgba(255,255,255,0.6)" />
+                        <YAxis stroke="rgba(255,255,255,0.6)" />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "rgba(0,0,0,0.8)",
+                            border: "1px solid rgba(255,255,255,0.2)",
+                            borderRadius: "8px",
+                            color: "#fff",
+                          }}
+                        />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="score"
+                          stroke="#10b981"
+                          strokeWidth={2}
+                          dot={{ fill: "#10b981", r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="group relative">
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000" />
+                  <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all duration-300">
+                    <h2 className="text-xl font-semibold text-white mb-6">Subject Performance</h2>
+                    {radarData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <RadarChart data={radarData}>
+                          <PolarGrid stroke="rgba(255,255,255,0.1)" />
+                          <PolarAngleAxis dataKey="subject" tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 12 }} />
+                          <PolarRadiusAxis
+                            angle={90}
+                            domain={[0, 100]}
+                            tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 10 }}
+                          />
+                          <Radar
+                            name="Score %"
+                            dataKey="score"
+                            stroke="#10b981"
+                            fill="#10b981"
+                            fillOpacity={0.3}
+                            strokeWidth={2}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "rgba(0,0,0,0.8)",
+                              border: "1px solid rgba(255,255,255,0.2)",
+                              borderRadius: "8px",
+                              color: "#fff",
+                            }}
+                          />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-80 text-gray-400">
+                        No data available
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => navigate("/performance")}
+              className="text-sm text-blue-300 hover:text-blue-200 hover:underline transition-colors duration-200"
+            >
+              View full analytics in the Performance tab →
+            </button>
           </div>
         </div>
       </div>
