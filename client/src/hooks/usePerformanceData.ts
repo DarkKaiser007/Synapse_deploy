@@ -1,17 +1,11 @@
 import { useState } from "react";
 import {
-  fetchBrainFatigue,
-  fetchForgettingCurve,
   fetchPerformance,
   type BrainFatigueData,
   type ForgettingCurveData,
   type PerformanceData,
 } from "../services/quizzes";
 import {
-  FATIGUE_CACHE_KEY,
-  FATIGUE_CACHE_TIME_KEY,
-  FORGETTING_CURVE_CACHE_KEY,
-  FORGETTING_CURVE_CACHE_TIME_KEY,
   PERFORMANCE_CACHE_KEY,
   PERFORMANCE_CACHE_TIME_KEY,
 } from "../services/performanceCache";
