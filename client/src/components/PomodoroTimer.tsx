@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Play, Pause, RotateCcw, Minimize2, Clock } from 'lucide-react';
+import { Play, Pause, RotateCcw, Minimize2, Clock, Settings } from 'lucide-react';
 import { usePomodoroStore, type PomodoroMode } from '../stores/pomodoro';
 import { clearAllPerformanceCache } from '../services/performanceCache';
 
@@ -11,15 +11,19 @@ const PomodoroTimer: React.FC = () => {
     isRunning,
     sessionCount,
     selectedSubjectId,
+    settings,
     toggleMinimized,
     start,
     pause,
     reset,
     setSubject,
     tick,
+    updateSettings,
+    logCompletedSession,
   } = usePomodoroStore();
 
   const [subjects, setSubjects] = useState<any[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
   const intervalRef = useRef<number | null>(null);
 
   // Fetch subjects
@@ -67,6 +71,7 @@ const PomodoroTimer: React.FC = () => {
       showNotification();
       if (currentMode === 'work') {
         logSession();
+        logCompletedSession();
       }
     }
   }, [timeRemaining, currentMode]);
@@ -112,7 +117,7 @@ const PomodoroTimer: React.FC = () => {
           },
           body: JSON.stringify({
             subjectId: selectedSubjectId,
-            durationMinutes: 25,
+            durationMinutes: settings.workMinutes,
             type: 'POMODORO',
           }),
         });
@@ -142,9 +147,9 @@ const PomodoroTimer: React.FC = () => {
 
   const getTotalTime = (mode: PomodoroMode) => {
     switch (mode) {
-      case 'work': return 25 * 60;
-      case 'shortBreak': return 5 * 60;
-      case 'longBreak': return 15 * 60;
+      case 'work': return settings.workMinutes * 60;
+      case 'shortBreak': return settings.shortBreakMinutes * 60;
+      case 'longBreak': return settings.longBreakMinutes * 60;
     }
   };
 
@@ -167,13 +172,62 @@ const PomodoroTimer: React.FC = () => {
     <div className="fixed bottom-6 right-6 z-50 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6 shadow-2xl max-w-sm">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-white font-semibold">Pomodoro Timer</h3>
-        <button
-          onClick={toggleMinimized}
-          className="text-gray-400 hover:text-white transition-colors"
-        >
-          <Minimize2 className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className="text-gray-400 hover:text-white transition-colors"
+            disabled={isRunning}
+            title={isRunning ? "Stop timer to change settings" : "Timer settings"}
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+          <button
+            onClick={toggleMinimized}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            <Minimize2 className="h-5 w-5" />
+          </button>
+        </div>
       </div>
+
+      {/* Settings Panel */}
+      {showSettings && !isRunning && (
+        <div className="mb-4 p-3 bg-white/5 border border-white/10 rounded-lg space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-gray-400">Focus (min)</label>
+            <input
+              type="number"
+              min={1}
+              max={120}
+              value={settings.workMinutes}
+              onChange={(e) => updateSettings({ workMinutes: Math.max(1, Math.min(120, Number(e.target.value) || 1)) })}
+              className="w-16 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm text-center focus:outline-none focus:border-blue-400"
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-gray-400">Short Break (min)</label>
+            <input
+              type="number"
+              min={1}
+              max={30}
+              value={settings.shortBreakMinutes}
+              onChange={(e) => updateSettings({ shortBreakMinutes: Math.max(1, Math.min(30, Number(e.target.value) || 1)) })}
+              className="w-16 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm text-center focus:outline-none focus:border-blue-400"
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-gray-400">Long Break (min)</label>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={settings.longBreakMinutes}
+              onChange={(e) => updateSettings({ longBreakMinutes: Math.max(1, Math.min(60, Number(e.target.value) || 1)) })}
+              className="w-16 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm text-center focus:outline-none focus:border-blue-400"
+            />
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col items-center">
         {/* Circular Progress */}

@@ -3,6 +3,18 @@ import { persist } from 'zustand/middleware';
 
 export type PomodoroMode = 'work' | 'shortBreak' | 'longBreak';
 
+interface PomodoroSettings {
+  workMinutes: number;
+  shortBreakMinutes: number;
+  longBreakMinutes: number;
+}
+
+interface CompletedSession {
+  durationMinutes: number;
+  timestamp: string;
+  subjectId: string | null;
+}
+
 interface PomodoroState {
   isMinimized: boolean;
   currentMode: PomodoroMode;
@@ -10,6 +22,8 @@ interface PomodoroState {
   isRunning: boolean;
   sessionCount: number;
   selectedSubjectId: string | null;
+  settings: PomodoroSettings;
+  completedSessions: CompletedSession[];
 
   // Actions
   toggleMinimized: () => void;
@@ -19,23 +33,36 @@ interface PomodoroState {
   setSubject: (subjectId: string | null) => void;
   tick: () => void;
   nextSession: () => void;
+  updateSettings: (settings: Partial<PomodoroSettings>) => void;
+  logCompletedSession: () => void;
+  getTotalStudyMinutes: () => number;
 }
 
-const DURATIONS = {
-  work: 25 * 60,
-  shortBreak: 5 * 60,
-  longBreak: 15 * 60,
+const DEFAULT_SETTINGS: PomodoroSettings = {
+  workMinutes: 25,
+  shortBreakMinutes: 5,
+  longBreakMinutes: 15,
 };
+
+function getDuration(mode: PomodoroMode, settings: PomodoroSettings): number {
+  switch (mode) {
+    case 'work': return settings.workMinutes * 60;
+    case 'shortBreak': return settings.shortBreakMinutes * 60;
+    case 'longBreak': return settings.longBreakMinutes * 60;
+  }
+}
 
 export const usePomodoroStore = create<PomodoroState>()(
   persist(
     (set, get) => ({
       isMinimized: false,
       currentMode: 'work',
-      timeRemaining: DURATIONS.work,
+      timeRemaining: DEFAULT_SETTINGS.workMinutes * 60,
       isRunning: false,
       sessionCount: 0,
       selectedSubjectId: null,
+      settings: DEFAULT_SETTINGS,
+      completedSessions: [],
 
       toggleMinimized: () =>
         set((state) => ({ isMinimized: !state.isMinimized })),
@@ -46,11 +73,40 @@ export const usePomodoroStore = create<PomodoroState>()(
 
       reset: () =>
         set((state) => ({
-          timeRemaining: DURATIONS[state.currentMode],
+          timeRemaining: getDuration(state.currentMode, state.settings),
           isRunning: false,
         })),
 
       setSubject: (selectedSubjectId) => set({ selectedSubjectId }),
+
+      updateSettings: (newSettings) =>
+        set((state) => {
+          const merged = { ...state.settings, ...newSettings };
+          // If not running, also update timeRemaining to reflect new duration
+          if (!state.isRunning) {
+            return {
+              settings: merged,
+              timeRemaining: getDuration(state.currentMode, merged),
+            };
+          }
+          return { settings: merged };
+        }),
+
+      logCompletedSession: () => {
+        const state = get();
+        const session: CompletedSession = {
+          durationMinutes: state.settings.workMinutes,
+          timestamp: new Date().toISOString(),
+          subjectId: state.selectedSubjectId,
+        };
+        set((s) => ({
+          completedSessions: [...s.completedSessions, session],
+        }));
+      },
+
+      getTotalStudyMinutes: () => {
+        return get().completedSessions.reduce((sum, s) => sum + s.durationMinutes, 0);
+      },
 
       tick: () =>
         set((state) => {
@@ -59,26 +115,25 @@ export const usePomodoroStore = create<PomodoroState>()(
           } else {
             // Session ended
             get().nextSession();
-            return { timeRemaining: DURATIONS[get().currentMode] };
+            return { timeRemaining: getDuration(get().currentMode, state.settings) };
           }
         }),
 
       nextSession: () =>
         set((state) => {
           if (state.currentMode === 'work') {
-            // Log the session
             const newSessionCount = state.sessionCount + 1;
             if (newSessionCount % 4 === 0) {
               return {
                 currentMode: 'longBreak',
-                timeRemaining: DURATIONS.longBreak,
+                timeRemaining: getDuration('longBreak', state.settings),
                 sessionCount: newSessionCount,
                 isRunning: false,
               };
             } else {
               return {
                 currentMode: 'shortBreak',
-                timeRemaining: DURATIONS.shortBreak,
+                timeRemaining: getDuration('shortBreak', state.settings),
                 sessionCount: newSessionCount,
                 isRunning: false,
               };
@@ -87,7 +142,7 @@ export const usePomodoroStore = create<PomodoroState>()(
             // Break ended, back to work
             return {
               currentMode: 'work',
-              timeRemaining: DURATIONS.work,
+              timeRemaining: getDuration('work', state.settings),
               isRunning: false,
             };
           }
@@ -102,6 +157,8 @@ export const usePomodoroStore = create<PomodoroState>()(
         isRunning: state.isRunning,
         sessionCount: state.sessionCount,
         selectedSubjectId: state.selectedSubjectId,
+        settings: state.settings,
+        completedSessions: state.completedSessions,
       }),
     }
   )

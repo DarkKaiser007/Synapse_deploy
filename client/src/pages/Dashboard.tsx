@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 import { apiRequest } from "../services/api";
 import StartSessionModal from "../components/StartSessionModal";
 import { usePerformanceData } from "../hooks/usePerformanceData";
+import { usePomodoroStore } from "../stores/pomodoro";
 import {
   CartesianGrid,
   Legend,
@@ -43,6 +44,30 @@ function Dashboard() {
   const [isGroupStudyModalOpen, setIsGroupStudyModalOpen] = useState(false);
   const [isLinkCopied, setIsLinkCopied] = useState(false);
   const copyResetTimerRef = useRef<number | null>(null);
+  const [notesCount, setNotesCount] = useState<number | null>(null);
+  const totalStudyMinutes = usePomodoroStore((s) => s.getTotalStudyMinutes());
+
+  // Fetch notes count
+  useEffect(() => {
+    const fetchNotesCount = async () => {
+      try {
+        const notes = await apiRequest("/notes", "GET");
+        if (Array.isArray(notes)) {
+          setNotesCount(notes.length);
+        }
+      } catch {
+        setNotesCount(0);
+      }
+    };
+    fetchNotesCount();
+  }, []);
+
+  const formatStudyTime = (minutes: number) => {
+    if (minutes < 60) return `${minutes}m`;
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  };
 
   useEffect(() => {
     return () => {
@@ -329,7 +354,7 @@ function Dashboard() {
                   <BookOpen className="h-8 w-8 text-[var(--color-primary)]" />
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-white">24</p>
+                  <p className="text-3xl font-bold text-white">{notesCount ?? "--"}</p>
                   <p className="text-gray-400 text-sm">Notes Created</p>
                 </div>
               </div>
@@ -344,7 +369,7 @@ function Dashboard() {
                   <Clock className="h-8 w-8 text-green-400" />
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-white">12h 30m</p>
+                  <p className="text-3xl font-bold text-white">{formatStudyTime(totalStudyMinutes)}</p>
                   <p className="text-gray-400 text-sm">Study Time</p>
                 </div>
               </div>
