@@ -87,22 +87,33 @@ export async function moderateContent(text: string): Promise<ModerationResult> {
     };
   }
 
-  const completion = await azureOpenAIClient.chat.completions.create({
-    model: azureOpenAIModel,
-    messages: [
-      {
-        role: "system",
-        content: MODERATION_SYSTEM_PROMPT,
-      },
-      {
-        role: "user",
-        content: trimmedText,
-      },
-    ],
-  });
+  try {
+    const completion = await azureOpenAIClient.chat.completions.create({
+      model: azureOpenAIModel,
+      messages: [
+        {
+          role: "system",
+          content: MODERATION_SYSTEM_PROMPT,
+        },
+        {
+          role: "user",
+          content: trimmedText,
+        },
+      ],
+    });
 
-  const raw = completion.choices[0]?.message?.content || "{}";
-  return normalizeModerationResult(extractJsonObject(raw));
+    const raw = completion.choices[0]?.message?.content || "{}";
+    return normalizeModerationResult(extractJsonObject(raw));
+  } catch (error) {
+    // If moderation fails (rate limit, timeout, bad JSON), default to safe
+    // so the actual chat request can still proceed.
+    console.error("CONTENT_MODERATION_ERROR (defaulting to safe):", error);
+    return {
+      safe: true,
+      reason: null,
+      category: "safe",
+    };
+  }
 }
 
 export function buildContentRejectedResponse(category: ModerationCategory) {

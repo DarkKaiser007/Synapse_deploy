@@ -133,8 +133,13 @@ router.post("/global", authMiddleware, async (req: AuthRequest, res) => {
 
     return res.json({ reply });
   } catch (error) {
-    console.error("GLOBAL CHAT ERROR:", error);
-    return res.status(500).json({ error: "Failed to process global chat message" });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("GLOBAL CHAT ERROR:", {
+      userId: req.user?.id,
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return res.status(500).json({ error: `Failed to process global chat message: ${errorMessage}` });
   }
 });
 
@@ -256,8 +261,15 @@ router.post("/:noteId", authMiddleware, async (req: AuthRequest, res) => {
       assistantMessage,
     });
   } catch (error) {
-    console.error("CHAT MESSAGE ERROR:", error);
-    return res.status(500).json({ error: "Failed to process chat message" });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error("CHAT MESSAGE ERROR:", {
+      noteId: req.params.noteId,
+      userId: req.user?.id,
+      error: errorMessage,
+      stack: errorStack,
+    });
+    return res.status(500).json({ error: `Failed to process chat message: ${errorMessage}` });
   }
 });
 
